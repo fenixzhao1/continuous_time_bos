@@ -7,7 +7,7 @@ library(ggplot2) # overwrite heatmap in latticeExtra
 library(dplyr)
 
 # load data
-full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_9_17_2.csv", header = T)
+full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_10_5.csv", header = T)
 full_data$round = as.double(substring(full_data$subsession_id, 2, 3))
 #full_data$round = full_data$subsession_id
 full_data = arrange(full_data, full_data$session_code, full_data$subsession_id, full_data$id_in_subsession, full_data$tick)
@@ -18,7 +18,7 @@ full_data$round_pair_id = paste(full_data$round, full_data$pair_id,  sep = "_")
 full_data$session_round_pair_id = paste(full_data$session_code, full_data$round_pair_id, sep = "_")
 
 # drop first 6 seconds and first 3 games
-full_data = filter(full_data, tick > 3)
+#full_data = filter(full_data, tick > 3)
 full_data = filter(full_data, round > 3)
 
 # create unique ids and pairs
@@ -33,7 +33,7 @@ for (i in 1:length(uniquepairs)){
   pairdata = subset(full_data, session_round_pair_id == uniquepairs[i])
   
   title = paste(as.character(uniquepairs[i]))
-  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/9_17_2/", title, sep = "")
+  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/10_5/", title, sep = "")
   file = paste(file, ".png", sep = "")
   
   png(file, width = 700, height = 400)
@@ -55,6 +55,7 @@ library(ggplot2)
 library(dplyr)
 library(haven)
 library(xtable)
+library(dtw)
 
 # load data
 df_1 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_8_26.csv", header = T)
@@ -72,11 +73,20 @@ df_4$round = as.double(substring(df_4$subsession_id, 2, 3))
 df_5 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_9_17_2.csv", header = T)
 df_5 = df_5 %>% mutate(sequence = 2)
 df_5$round = as.double(substring(df_5$subsession_id, 2, 3))
+df_6 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_10_2_1.csv", header = T)
+df_6 = df_6 %>% mutate(sequence = 2)
+df_6$round = df_6$subsession_id
+df_7 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_10_2_2.csv", header = T)
+df_7 = df_7 %>% mutate(sequence = 1)
+df_7$round = as.double(substring(df_7$subsession_id, 2, 3))
+df_8 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_10_5.csv", header = T)
+df_8 = df_8 %>% mutate(sequence = 2)
+df_8$round = as.double(substring(df_8$subsession_id, 2, 3))
 
 # combine all session data
-df = rbind(df_1, df_2, df_3, df_4, df_5)
+df = rbind(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)
 df = arrange(df, df$session_code, df$subsession_id, df$id_in_subsession, df$tick)
-rm(df_1, df_2, df_3, df_4, df_5)
+rm(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)
 
 # create pair id
 df$pair_id = paste(df$p1_code, df$p2_code, sep = "_")
@@ -88,19 +98,19 @@ df = filter(df, tick > 3 | num_subperiods != 0)
 df = filter(df, round > 3)
 
 # add treatment variables
-df = df %>% mutate(game = ifelse(payoff1Bb == 280, "BOS1.4", ifelse(payoff1Bb == 160, "BOS2.5", "BOS10")))
+df = df %>% mutate(game = ifelse(payoff1Bb == 280, "BoS1.4", ifelse(payoff1Bb == 160, "BoS2.5", "BoS10")))
 df = df %>% mutate(time = ifelse(num_subperiods==0, 'Continuous', 'Discrete'))
 df$treatment = paste(df$time, df$game, sep = '_')
-df = df %>% mutate(BOS1.4 = ifelse(payoff1Bb == 280,1,0))
-df = df %>% mutate(BOS2.5 = ifelse(payoff1Bb == 160,1,0))
-df = df %>% mutate(BOS10 = ifelse(payoff1Bb == 40,1,0))
+df = df %>% mutate(BoS1.4 = ifelse(payoff1Bb == 280,1,0))
+df = df %>% mutate(BoS2.5 = ifelse(payoff1Bb == 160,1,0))
+df = df %>% mutate(BoS10 = ifelse(payoff1Bb == 40,1,0))
 df = df %>% mutate(continuous = ifelse(num_subperiods==0, 1, 0))
 
 # add payoff variables and NE variables
 df = df %>% mutate(p1_payoff = payoff1Aa*p1_strategy*p2_strategy + payoff1Ab*p1_strategy*(1-p2_strategy) + payoff1Ba*(1-p1_strategy)*p2_strategy + payoff1Bb*(1-p1_strategy)*(1-p2_strategy))
 df = df %>% mutate(p2_payoff = payoff2Aa*p1_strategy*p2_strategy + payoff2Ab*p1_strategy*(1-p2_strategy) + payoff2Ba*(1-p1_strategy)*p2_strategy + payoff2Bb*(1-p1_strategy)*(1-p2_strategy))
-df = df %>% mutate(p1NEmix = ifelse(game=="BOS1.4", 0.59, ifelse(game=="BOS2.5", 0.71, 0.91)))  
-df = df %>% mutate(p2NEmix = ifelse(game=="BOS1.4", 0.41, ifelse(game=="BOS2.5", 0.29, 0.09)))
+df = df %>% mutate(p1NEmix = ifelse(game=="BoS1.4", 0.59, ifelse(game=="BoS2.5", 0.71, 0.91)))  
+df = df %>% mutate(p2NEmix = ifelse(game=="BoS1.4", 0.41, ifelse(game=="BoS2.5", 0.29, 0.09)))
 df = df %>% mutate(p1NEdiff = (p1_strategy - p1NEmix)^2)
 df = df %>% mutate(p2NEdiff = (p2_strategy - p2NEmix)^2)
 
@@ -130,23 +140,23 @@ uniquePlayer = union(unique(df$p1_code), unique(df$p2_code))
 
 # get state output file
 df_stata = df
-df_stata = df_stata %>% rename(BOS1_4 = BOS1.4, BOS2_5 = BOS2.5)
+df_stata = df_stata %>% rename(BoS1_4 = BoS1.4, BoS2_5 = BoS2.5)
 write_dta(df_stata, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos.dta")
 
 
 ##### Treatment effect: Coordination rate summary table #####
 # create summary table
 summary = matrix(NA, nrow = 5, ncol = 3)
-rownames(summary) = c('BOS1.4', 'BOS1.4-BOS2.5', 'BOS2.5', 'BOS2.5-BOS10', 'BOS10')
+rownames(summary) = c('BoS1.4', 'BoS1.4-BoS2.5', 'BoS2.5', 'BoS2.5-BoS10', 'BoS10')
 colnames(summary) = c('Continuous', 'Discrete', 'Continuous-Discrete')
 
 # set up sub dataset
-df_c1 = filter(df, treatment == 'Continuous_BOS1.4')
-df_c2 = filter(df, treatment == 'Continuous_BOS2.5')
-df_c10 = filter(df, treatment == 'Continuous_BOS10')
-df_d1 = filter(df, treatment == 'Discrete_BOS1.4')
-df_d2 = filter(df, treatment == 'Discrete_BOS2.5')
-df_d10 = filter(df, treatment == 'Discrete_BOS10')
+df_c1 = filter(df, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(df, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(df, treatment == 'Continuous_BoS10')
+df_d1 = filter(df, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(df, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(df, treatment == 'Discrete_BoS10')
 
 # fill out the table
 summary[1,1] = mean(df_c1$coordinate)
@@ -209,10 +219,13 @@ for (i in 1:length(treatmenttype)){
   )
 }
 
-# K-S test
-ks.test(df_treat[[1]]$coordinate_rate, df_treat[[4]]$coordinate_rate)
-ks.test(df_treat[[2]]$coordinate_rate, df_treat[[5]]$coordinate_rate)
-ks.test(df_treat[[3]]$coordinate_rate, df_treat[[6]]$coordinate_rate)
+# DTW distance
+d1 = dtw(df_treat[[1]]$coordinate_rate, df_treat[[4]]$coordinate_rate)
+d2 = dtw(df_treat[[2]]$coordinate_rate, df_treat[[5]]$coordinate_rate)
+d3 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[6]]$coordinate_rate)
+d1$normalizedDistance
+d2$normalizedDistance
+d3$normalizedDistance
 
 # set up plot
 title = 'coordination_within_supergames'
@@ -230,7 +243,7 @@ pic = ggplot() +
   scale_y_continuous(name='coordination rate', limits=c(0.3,1)) +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BOS1.4', 'BOS2.5', 'BOS10')) +
+  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -238,7 +251,7 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-rm(df_temp, df_treat, pic)
+rm(df_temp, df_treat, pic, d1, d2, d3)
 
 
 ##### Treatment effect: Coordination learning between super games #####
@@ -297,7 +310,8 @@ rm(df_treat, df_treat_1, df_treat_2, test, ordereffect)
 df_2 = df
 length = rep(NA, length(uniquepairs))
 pair_summary = data.frame(session_round_pair_id = length, treatment = length,
-                          game = length, time = length, type = length)
+                          game = length, time = length, type = length,
+                          sequence = length, block = length)
 
 # loop over pairs for classification
 for (i in 1:length(uniquepairs)){
@@ -308,6 +322,8 @@ for (i in 1:length(uniquepairs)){
   pair_summary$treatment[i] = df_pair$treatment[1]
   pair_summary$game[i] = df_pair$game[1]
   pair_summary$time[i] = df_pair$time[1]
+  pair_summary$sequence[i] = df_pair$sequence[1]
+  pair_summary$block[i] = df_pair$block[1]
   
   # classify turn taking and one NE dynamics
   if (mean(df_pair$coordinate) >= 0.8){
@@ -325,6 +341,9 @@ pair_summary = pair_summary %>% mutate(alternating = ifelse(type=='alternating',
 pair_summary = pair_summary %>% mutate(one_ne = ifelse(type=='one NE', 1, 0))
 pair_summary = pair_summary %>% mutate(others = ifelse(type=='others', 1, 0))
 
+# export stata data
+write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos_pair2.dta")
+
 # generate distribution table
 sum_pair = matrix(NA, nrow = 6, ncol = 3)
 rownames(sum_pair) = treatmenttype
@@ -337,12 +356,12 @@ for (i in 1:length(treatmenttype)){
 }
 
 # add statistical testing result
-df_c1 = filter(pair_summary, treatment == 'Continuous_BOS1.4')
-df_c2 = filter(pair_summary, treatment == 'Continuous_BOS2.5')
-df_c10 = filter(pair_summary, treatment == 'Continuous_BOS10')
-df_d1 = filter(pair_summary, treatment == 'Discrete_BOS1.4')
-df_d2 = filter(pair_summary, treatment == 'Discrete_BOS2.5')
-df_d10 = filter(pair_summary, treatment == 'Discrete_BOS10')
+df_c1 = filter(pair_summary, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(pair_summary, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(pair_summary, treatment == 'Continuous_BoS10')
+df_d1 = filter(pair_summary, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(pair_summary, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(pair_summary, treatment == 'Discrete_BoS10')
 
 sum_pair2 = matrix(NA, nrow = 3, ncol = 3)
 rownames(sum_pair2) = c('R1-R4', 'R2-R5', 'R3-R6')
@@ -391,6 +410,61 @@ sum_pair = rbind(sum_pair, sum_pair2)
 xtable(sum_pair, digits = 2, label = 'pair_class', align = 'lccc')
 rm(df_2, df_pair, pair_summary, sum_pair, sum_pair2, test)
 rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_treat)
+
+
+##### Mechanisms: Pair classification showcase #####
+# set up dataset and parameters
+df_2 = filter(df, period > 10)
+length = rep(NA, length(uniquepairs))
+pair_summary = data.frame(session_round_pair_id = length, treatment = length,
+                          game = length, time = length, type = length,
+                          nash_total = length, nash_diff = length)
+
+# loop over pairs for classification
+for (i in 1:length(uniquepairs)){
+  df_pair = filter(df_2, session_round_pair_id == uniquepairs[i])
+  
+  # update treatment info
+  pair_summary$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
+  pair_summary$treatment[i] = df_pair$treatment[1]
+  pair_summary$game[i] = df_pair$game[1]
+  pair_summary$time[i] = df_pair$time[1]
+  pair_summary$nash_total[i] = round(mean(df_pair$coordinate), digits=2)
+  pair_summary$nash_diff[i] = round(abs(mean(df_pair$Nash_Aa) - mean(df_pair$Nash_Bb)), digits=2)
+  
+  # classify turn taking and one NE dynamics
+  if (mean(df_pair$coordinate) >= 0.8){
+    if (abs(mean(df_pair$Nash_Aa) - mean(df_pair$Nash_Bb)) <= 0.2 )
+    {pair_summary$type[i] = 'alternating'}
+    else{pair_summary$type[i] = 'one NE'}
+  }
+  else{
+    pair_summary$type[i] = 'others'
+  }
+}
+
+# draw scatter plot
+title = 'classification_scatter'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 600, height = 500)
+pic = ggplot(data = pair_summary) +
+  geom_rect(aes(xmin = 0.8, ymin = 0, xmax = 1, ymax = 0.2, fill='green'), color='green') +
+  geom_rect(aes(xmin = 0.8, ymin = 0.2, xmax = 1, ymax = 1, fill='yellow'), color='yellow') +
+  geom_jitter(aes(x=nash_total, y=nash_diff, colour=time), width=0.05, height=0.05) +
+  scale_x_continuous(name='total time at Nash', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='time difference in two pure Nash', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), 
+                      labels=c('continuous','discrete')) +
+  scale_fill_manual(values=c('green','yellow'), 
+                    labels=c('Alternating zone','One NE zone')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
+dev.off()
 
 
 ##### Mechanisms: Length of stay distribution #####
@@ -455,12 +529,12 @@ df_stay = filter(df_stay, time == 'Discrete' | length >= 2)
 df_stay = df_stay %>% mutate(length_period = ifelse(time=='Discrete', length, round(length/12, digits=1)))
 
 # draw distribution plot
-df_c1 = filter(df_stay, treatment == 'Continuous_BOS1.4')
-df_c2 = filter(df_stay, treatment == 'Continuous_BOS2.5')
-df_c10 = filter(df_stay, treatment == 'Continuous_BOS10')
-df_d1 = filter(df_stay, treatment == 'Discrete_BOS1.4')
-df_d2 = filter(df_stay, treatment == 'Discrete_BOS2.5')
-df_d10 = filter(df_stay, treatment == 'Discrete_BOS10')
+df_c1 = filter(df_stay, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(df_stay, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(df_stay, treatment == 'Continuous_BoS10')
+df_d1 = filter(df_stay, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(df_stay, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(df_stay, treatment == 'Discrete_BoS10')
 
 # set up plot
 title = 'distribution_duration_nash'
@@ -468,17 +542,17 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_density(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
-  stat_density(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
-  stat_density(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
-  stat_density(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
-  stat_density(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
-  stat_density(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BOS1.4', 'BOS2.5', 'BOS10')) +
+  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -554,12 +628,12 @@ df_stay = filter(df_stay, is.na(treatment) == FALSE)
 df_stay = df_stay %>% mutate(length_period = ifelse(time=='Discrete', length, round(length/12, digits=1)))
 
 # draw distribution plot
-df_c1 = filter(df_stay, treatment == 'Continuous_BOS1.4')
-df_c2 = filter(df_stay, treatment == 'Continuous_BOS2.5')
-df_c10 = filter(df_stay, treatment == 'Continuous_BOS10')
-df_d1 = filter(df_stay, treatment == 'Discrete_BOS1.4')
-df_d2 = filter(df_stay, treatment == 'Discrete_BOS2.5')
-df_d10 = filter(df_stay, treatment == 'Discrete_BOS10')
+df_c1 = filter(df_stay, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(df_stay, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(df_stay, treatment == 'Continuous_BoS10')
+df_d1 = filter(df_stay, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(df_stay, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(df_stay, treatment == 'Discrete_BoS10')
 
 # set up plot
 title = 'distribution_duration_mismatch'
@@ -567,17 +641,17 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_density(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
-  stat_density(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
-  stat_density(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
-  stat_density(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
-  stat_density(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
-  stat_density(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BOS1.4', 'BOS2.5', 'BOS10')) +
+  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -657,6 +731,21 @@ for (k in 1:4){
 }
 transition_c = transition_prob
 
+# calculate the transition probability without diagonal
+transition_prob = transition
+transition[1,1] = 0
+transition[2,2] = 0
+transition[3,3] = 0
+transition[4,4] = 0
+for (k in 1:4){
+  transition_prob[k,1] = round(transition[k,1] / sum(transition[k,1:4]), 2)
+  transition_prob[k,2] = round(transition[k,2] / sum(transition[k,1:4]), 2)
+  transition_prob[k,3] = round(transition[k,3] / sum(transition[k,1:4]), 2)
+  transition_prob[k,4] = round(transition[k,4] / sum(transition[k,1:4]), 2)
+  transition_prob[k,5] = sum(transition[k,1:4])
+}
+transition_c2 = transition_prob
+
 ## Discrete time
 # create transition matrix
 transition = matrix(0, nrow = 4, ncol = 5)
@@ -719,11 +808,28 @@ for (k in 1:4){
 }
 transition_d = transition_prob
 
+# calculate the transition probability without diagonal
+transition_prob = transition
+transition[1,1] = 0
+transition[2,2] = 0
+transition[3,3] = 0
+transition[4,4] = 0
+for (k in 1:4){
+  transition_prob[k,1] = round(transition[k,1] / sum(transition[k,1:4]), 2)
+  transition_prob[k,2] = round(transition[k,2] / sum(transition[k,1:4]), 2)
+  transition_prob[k,3] = round(transition[k,3] / sum(transition[k,1:4]), 2)
+  transition_prob[k,4] = round(transition[k,4] / sum(transition[k,1:4]), 2)
+  transition_prob[k,5] = sum(transition[k,1:4])
+}
+transition_d2 = transition_prob
+
 # data export
 xtable(transition_c, digits = 2, label = 'transition_c', align = 'lccccc')
 xtable(transition_d, digits = 2, label = 'transition_d', align = 'lccccc')
+xtable(transition_c2, digits = 2, label = 'transition_c_nod', align = 'lccccc')
+xtable(transition_d2, digits = 2, label = 'transition_d_nod', align = 'lccccc')
 rm(treatment_data, round_data, transition, transition_prob)
-rm(transition_c, transition_d)
+rm(transition_c, transition_d, transition_c2, transition_d2)
 
 
 ##### Mechanisms: First time reach NE #####
@@ -752,12 +858,12 @@ for (i in 1:length(uniquepairs)){
 }
 
 # draw distribution plot
-df_c1 = filter(pair_summary, treatment == 'Continuous_BOS1.4')
-df_c2 = filter(pair_summary, treatment == 'Continuous_BOS2.5')
-df_c10 = filter(pair_summary, treatment == 'Continuous_BOS10')
-df_d1 = filter(pair_summary, treatment == 'Discrete_BOS1.4')
-df_d2 = filter(pair_summary, treatment == 'Discrete_BOS2.5')
-df_d10 = filter(pair_summary, treatment == 'Discrete_BOS10')
+df_c1 = filter(pair_summary, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(pair_summary, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(pair_summary, treatment == 'Continuous_BoS10')
+df_d1 = filter(pair_summary, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(pair_summary, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(pair_summary, treatment == 'Discrete_BoS10')
 
 # set up plot
 title = 'timing_first_ne'
@@ -765,18 +871,18 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_density(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) + 
-  stat_density(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) +
-  stat_density(geom="line", data=df_c2, aes(x=timing, colour='blue', linetype='longdash')) +
-  stat_density(geom="line", data=df_c1, aes(x=timing, colour='blue', linetype='dotted')) +
-  stat_density(geom="line", data=df_d10, aes(x=timing, colour='red', linetype='solid')) +
-  stat_density(geom="line", data=df_d2, aes(x=timing, colour='red', linetype='longdash')) +
-  stat_density(geom="line", data=df_d1, aes(x=timing, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) + 
+  stat_ecdf(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_c2, aes(x=timing, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_c1, aes(x=timing, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="line", data=df_d10, aes(x=timing, colour='red', linetype='solid')) +
+  stat_ecdf(geom="line", data=df_d2, aes(x=timing, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="line", data=df_d1, aes(x=timing, colour='red', linetype='dotted')) +
   scale_x_continuous(name='timing(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BOS1.4', 'BOS2.5', 'BOS10')) +
+  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -826,10 +932,13 @@ for (i in 1:length(treatmenttype)){
   )
 }
 
-# K-S test
-ks.test(df_treat[[1]]$payoff_diff, df_treat[[4]]$payoff_diff)
-ks.test(df_treat[[2]]$payoff_diff, df_treat[[5]]$payoff_diff)
-ks.test(df_treat[[3]]$payoff_diff, df_treat[[6]]$payoff_diff)
+# DTW distance
+d1 = dtw(df_treat[[1]]$payoff_diff, df_treat[[4]]$payoff_diff)
+d2 = dtw(df_treat[[2]]$payoff_diff, df_treat[[5]]$payoff_diff)
+d3 = dtw(df_treat[[3]]$payoff_diff, df_treat[[6]]$payoff_diff)
+d1$normalizedDistance
+d2$normalizedDistance
+d3$normalizedDistance
 
 # set up plot
 title = 'inequality_within_supergames'
@@ -847,7 +956,7 @@ pic = ggplot() +
   scale_y_continuous(name='difference of cumulative payoff') +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BOS1.4', 'BOS2.5', 'BOS10')) +
+  scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -855,4 +964,4 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-rm(df_temp, df_treat, df_pair, pic)
+rm(df_temp, df_treat, df_pair, pic, d1, d2, d3)
