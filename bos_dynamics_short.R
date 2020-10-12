@@ -365,7 +365,6 @@ for (i in 1:length(uniquepairs)){
 # organize dataset
 df_stay = cbind(df_length, df_char)
 df_stay = filter(df_stay, is.na(treatment) == FALSE)
-df_stay = filter(df_stay, time == 'Discrete' | length >= 2)
 df_stay = df_stay %>% mutate(length_period = ifelse(time=='Discrete', length, round(length/12, digits=1)))
 
 # draw distribution plot
