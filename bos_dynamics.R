@@ -49,6 +49,11 @@ for (i in 1:length(uniquepairs)){
 }
 
 
+##### Power analysis #####
+library(pwr)
+pwr.t.test(n = NULL, d = 0.5, sig.level = 0.05, power = 0.95, type = "two.sample")
+
+
 ##### Data preparation #####
 # load packages
 library(ggplot2)
@@ -206,6 +211,47 @@ print(test_d2_d10$p.value)
 xtable(summary, digits = 2, label = 'summary_table', align = 'lccc')
 rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, summary)
 rm(test_c1_d1, test_c2_d2, test_c10_d10, test_c1_c2, test_d1_d2, test_c2_c10, test_d2_d10)
+
+
+##### Treatment effect: Coordination rate summary by pairs#####
+length = rep(NA, length(uniquepairs))
+pair_summary = data.frame(session_round_pair_id = length, treatment = length, coordinate = length,
+                          game = length, time = length, sequence = length, block = length)
+
+# loop over pairs for classification
+for (i in 1:length(uniquepairs)){
+  df_pair = filter(df, session_round_pair_id == uniquepairs[i])
+  
+  # update treatment info
+  pair_summary$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
+  pair_summary$treatment[i] = df_pair$treatment[1]
+  pair_summary$game[i] = df_pair$game[1]
+  pair_summary$time[i] = df_pair$time[1]
+  pair_summary$sequence[i] = df_pair$sequence[1]
+  pair_summary$block[i] = df_pair$block[1]
+  pair_summary$coordinate[i] = mean(df_pair$coordinate)
+}
+
+# export stata data
+write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos_pair3.dta")
+
+# check distribution
+df_c = filter(pair_summary, time == 'Continuous')
+df_d = filter(pair_summary, time == 'Discrete')
+
+# set up plot
+pic = ggplot() +
+  stat_density(geom = "line", data=df_c, aes(x=coordinate, colour='blue')) +
+  stat_density(geom = "line", data=df_d, aes(x=coordinate, colour='red')) +
+  scale_x_continuous(name='coordinate rate', waiver()) +
+  scale_y_continuous(name='density') +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
 
 
 ##### Treatment effect: Coordination learning within each super game #####
@@ -541,12 +587,12 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_ecdf(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
-  stat_ecdf(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
@@ -640,12 +686,12 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_ecdf(geom="line", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
-  stat_ecdf(geom="line", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_c10, aes(x=length_period, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_c2, aes(x=length_period, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_c1, aes(x=length_period, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
@@ -870,13 +916,13 @@ file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBO
 file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
-  stat_ecdf(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) + 
-  stat_ecdf(geom="line", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_c2, aes(x=timing, colour='blue', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_c1, aes(x=timing, colour='blue', linetype='dotted')) +
-  stat_ecdf(geom="line", data=df_d10, aes(x=timing, colour='red', linetype='solid')) +
-  stat_ecdf(geom="line", data=df_d2, aes(x=timing, colour='red', linetype='longdash')) +
-  stat_ecdf(geom="line", data=df_d1, aes(x=timing, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) + 
+  stat_ecdf(geom="step", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_c2, aes(x=timing, colour='blue', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_c1, aes(x=timing, colour='blue', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_d10, aes(x=timing, colour='red', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_d2, aes(x=timing, colour='red', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_d1, aes(x=timing, colour='red', linetype='dotted')) +
   scale_x_continuous(name='timing(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
