@@ -137,6 +137,15 @@ df = df %>% mutate(Mismatch_aggressive = ifelse(type=='Aggressive', 1, 0))
 df = df %>% mutate(coordinate = Nash_Aa + Nash_Bb)
 df = df %>% mutate(mismatch = Mismatch_accommodate + Mismatch_aggressive)
 
+# numericalize the behavioral type
+df = df %>% mutate(type_num = NA)
+for(m in 1:length(df$tick)){
+  if(df$p1_strategy[m]==1 & df$p2_strategy[m]==1){df$type_num[m]=2}
+  if(df$p1_strategy[m]==0 & df$p2_strategy[m]==0){df$type_num[m]=3}
+  if(df$p1_strategy[m]==0 & df$p2_strategy[m]==1){df$type_num[m]=4}
+  if(df$p1_strategy[m]==1 & df$p2_strategy[m]==0){df$type_num[m]=1}
+}
+
 # create unique ids and pairs
 uniquepairs = unique(df$session_round_pair_id)
 gametype = unique(df$game)
@@ -147,6 +156,32 @@ uniquePlayer = union(unique(df$p1_code), unique(df$p2_code))
 df_stata = df
 df_stata = df_stata %>% rename(BoS1_4 = BoS1.4, BoS2_5 = BoS2.5)
 write_dta(df_stata, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos.dta")
+
+
+##### Pair analysis: subjects dynamics #####
+# loop over pairs
+for (i in 1:length(uniquepairs)){
+  df_pair = filter(df, session_round_pair_id == uniquepairs[i])
+  
+  title = paste(as.character(uniquepairs[i]))
+  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/by_profile/", title, sep = "")
+  file = paste(file, ".png", sep = "")
+  png(file, width = 500, height = 300)
+  
+  pic = ggplot() +
+    geom_line(data = df_pair, aes(x=period, y=type_num)) + 
+    scale_x_continuous(name='starting period', waiver(), limits=c(0,20), breaks = c(0,5,10,15,20)) +
+    scale_y_continuous(name='average length of duration at Nash', limits=c(1,4),
+                       breaks = c(1,2,3,4), labels = c('(A,b)','(A,a)','(B,b)','(B,a)')) +
+    theme_bw() + 
+    theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+          axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+          axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+  
+  print(pic)
+  
+  dev.off()
+}
 
 
 ##### Treatment effect: Coordination rate summary table #####
@@ -713,7 +748,168 @@ rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10)
 rm(df_length, df_char, df_pair, df_stay, pic)
 
 
-##### Mechanisms: Transition probability matrix #####
+##### Mechanisms_ext: Whether the duration at Nash is squeezed out over time #####
+# create dataset
+df = arrange(df, df$session_code, df$subsession_id, df$id_in_subsession, df$tick)
+df_length = data.frame(matrix(0, nrow = 1, ncol = 2))
+df_char = data.frame(matrix(NA, nrow = 1, ncol = 3))
+colnames(df_length) = c('length', 'start')
+colnames(df_char) = c('session_round_pair_id', 'treatment', 'time')
+
+# loop over pairs to update the dataset
+for (i in 1:length(uniquepairs)){
+  df_pair = filter(df, session_round_pair_id == uniquepairs[i])
+  
+  # initialize the event observation and parameters
+  pair_id = df_pair$session_round_pair_id[1]
+  treatment = df_pair$treatment[1]
+  treat_time = df_pair$time[1]
+  time = 0
+  
+  # loop over observations
+  for (j in 1:length(df_pair$period)){
+    
+    # j > 1
+    if (j > 1){
+      if (df_pair$type[j] == df_pair$type[j-1] & df_pair$coordinate[j] == 1){
+        time = time + 1
+      }
+      else{
+        if (time > 0){
+          event = c(pair_id, treatment, treat_time)
+          record = c(time, start)
+          df_length = rbind(df_length, record)
+          df_char = rbind(df_char, event)
+          time = 0
+        }
+        if (df_pair$coordinate[j] == 1){
+          time = time + 1
+          start = df_pair$period[j]
+        }
+      }
+    }
+    # j = 1
+    else{
+      if (df_pair$coordinate[j] == 1){
+        time = time + 1
+        start = df_pair$period[j]
+      }
+    }
+    
+    # record the last event
+    if (j == length(df_pair$period) & time > 0){
+      event = c(pair_id, treatment, treat_time)
+      record = c(time, start)
+      df_length = rbind(df_length, record)
+      df_char = rbind(df_char, event)
+    }
+  }
+}
+
+# organize dataset
+df_stay = cbind(df_length, df_char)
+df_stay = filter(df_stay, is.na(treatment) == FALSE)
+df_stay = df_stay %>% mutate(length_period = ifelse(time=='Discrete', length, round(length/12, digits=1)))
+df_stay = df_stay %>% mutate(start_time = floor(start))
+
+# further generate the average length at time tick in continuous time
+df_stay_c = filter(df_stay, time == 'Continuous')
+uniquetime = unique(df_stay_c$start_time)
+length = rep(NA, length(uniquetime))
+df_stay_cavg = data.frame(
+  session_round_pair_id = length, treatment = length, time = length,
+  length_period = length, start_time = length)
+for (i in 1:length(uniquetime)){
+  df_sub = filter(df_stay_c, start_time == uniquetime[i])
+  df_stay_cavg$session_round_pair_id[i] = df_sub$session_round_pair_id[1]
+  df_stay_cavg$treatment[i] = df_sub$treatment[1]
+  df_stay_cavg$time[i] = df_sub$time[1]
+  df_stay_cavg$length_period[i] = mean(df_sub$length_period)
+  df_stay_cavg$start_time[i] = df_sub$start_time[1]
+}
+df_stay_cavg = arrange(df_stay_cavg, df_stay_cavg$time, df_stay_cavg$start_time)
+
+# further generate the average length at time tick in discrete time
+df_stay_d = filter(df_stay, time == 'Discrete')
+uniquetime = unique(df_stay_d$start_time)
+length = rep(NA, length(uniquetime))
+df_stay_davg = data.frame(
+  session_round_pair_id = length, treatment = length, time = length,
+  length_period = length, start_time = length)
+for (i in 1:length(uniquetime)){
+  df_sub = filter(df_stay_d, start_time == uniquetime[i])
+  df_stay_davg$session_round_pair_id[i] = df_sub$session_round_pair_id[1]
+  df_stay_davg$treatment[i] = df_sub$treatment[1]
+  df_stay_davg$time[i] = df_sub$time[1]
+  df_stay_davg$length_period[i] = mean(df_sub$length_period)
+  df_stay_davg$start_time[i] = df_sub$start_time[1]
+}
+df_stay_davg = arrange(df_stay_davg, df_stay_davg$time, df_stay_davg$start_time)
+
+# plot the relation between start time and length of stay in two time environments
+title = 'duration_nash_squeeze_over_time'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 700, height = 300)
+pic = ggplot() +
+  geom_line(data = df_stay_cavg, aes(x=start_time, y=length_period, colour='blue')) + 
+  geom_line(data = df_stay_davg, aes(x=start_time, y=length_period, colour='red')) + 
+  scale_x_continuous(name='starting period', waiver(), limits=c(0,20), breaks = c(1,5,10,15,19,20)) +
+  scale_y_continuous(name='average length of duration at Nash') +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
+dev.off()
+
+rm(df_char, df_length, df_pair, df_stay, df_stay_c, df_stay_cavg)
+rm(df_stay_d, df_stay_davg, df_sub, pic)
+
+
+##### Mechanisms_ext: Whether the interaction is more frequent over time #####
+# add column see whether subjects switch between profiles
+df_int = filter(df, floor(period)-period == 0)
+df_int = df_int %>% group_by(session_round_pair_id) %>% mutate(
+  switch = ifelse(type == lag(type), 0, 1))
+
+# generate prob of switching over time in continuous time
+df_c = filter(df_int, time == 'Continuous')
+df_cswitch = data.frame(
+  period = tapply(df_c$period, df_c$period, mean),
+  prob_switch = tapply(df_c$switch, df_c$period, mean))
+
+# generate prob of switching over time in continuous time
+df_d = filter(df_int, time == 'Discrete')
+df_dswitch = data.frame(
+  period = tapply(df_d$period, df_d$period, mean),
+  prob_switch = tapply(df_d$switch, df_d$period, mean))
+
+# plot the relation between time and probability of switch
+title = 'prob_transition_over_time'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 700, height = 300)
+pic = ggplot() +
+  geom_line(data = df_cswitch, aes(x=period, y=prob_switch, colour='blue')) + 
+  geom_line(data = df_dswitch, aes(x=period, y=prob_switch, colour='red')) + 
+  scale_x_continuous(name='period', waiver(), limits=c(0,20), breaks = c(1,5,10,15,19,20)) +
+  scale_y_continuous(name='probability of switch') +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
+dev.off()
+
+rm(df_int, df_c, df_cswitch, df_d, df_dswitch, pic)
+
+
+##### Mechanisms: Transition probability matrix by time environments #####
 ## Continuous time
 # create transition matrix
 transition = matrix(0, nrow = 4, ncol = 5)
@@ -875,6 +1071,193 @@ xtable(transition_c2, digits = 2, label = 'transition_c_nod', align = 'lccccc')
 xtable(transition_d2, digits = 2, label = 'transition_d_nod', align = 'lccccc')
 rm(treatment_data, round_data, transition, transition_prob)
 rm(transition_c, transition_d, transition_c2, transition_d2)
+
+
+##### Mechanisms_ext: Transition probability matrix by all treatments #####
+# set up transition matrix container
+transition_all = list()
+
+# loop over treatments
+for (m in 1:length(treatmenttype)){
+  
+  # create transition matrix
+  transition = matrix(0, nrow = 4, ncol = 5)
+  rownames(transition) = c('(A,b) at t', '(B,a) at t', '(A,a) at t', '(B,b) at t')
+  colnames(transition) = c('(A,b) at t+1', '(B,a) at t+1', '(A,a) at t+1', '(B,b) at t+1', 'num of transitions')
+  
+  # select sub dataset
+  treatment_data = filter(df, treatment == treatmenttype[m])
+  pairs = unique(treatment_data$session_round_pair_id)
+  
+  # loop over pairs
+  for (i in 1:length(pairs)){
+    round_data = filter(treatment_data, session_round_pair_id == pairs[i])
+    
+    # loop over observations
+    for (j in 2:length(round_data$tick)){
+      
+      # when the original observation is (1,1)
+      if (round_data$type[j-1] == 'Nash(A,a)'){
+        if (round_data$type[j] == 'Nash(A,a)'){transition[3,3] = transition[3,3] + 1}
+        if (round_data$type[j] == 'Nash(B,b)'){transition[3,4] = transition[3,4] + 1}
+        if (round_data$type[j] == 'Accommodate'){transition[3,2] = transition[3,2] + 1}
+        if (round_data$type[j] == 'Aggressive'){transition[3,1] = transition[3,1] + 1}
+      }
+      
+      # when the original observation is (0,0)
+      if (round_data$type[j-1] == 'Nash(B,b)'){
+        if (round_data$type[j] == 'Nash(A,a)'){transition[4,3] = transition[4,3] + 1}
+        if (round_data$type[j] == 'Nash(B,b)'){transition[4,4] = transition[4,4] + 1}
+        if (round_data$type[j] == 'Accommodate'){transition[4,2] = transition[4,2] + 1}
+        if (round_data$type[j] == 'Aggressive'){transition[4,1] = transition[4,1] + 1}
+      }
+      
+      # when the original observation is (1,0)
+      if (round_data$type[j-1] == 'Aggressive'){
+        if (round_data$type[j] == 'Nash(A,a)'){transition[1,3] = transition[1,3] + 1}
+        if (round_data$type[j] == 'Nash(B,b)'){transition[1,4] = transition[1,4] + 1}
+        if (round_data$type[j] == 'Accommodate'){transition[1,2] = transition[1,2] + 1}
+        if (round_data$type[j] == 'Aggressive'){transition[1,1] = transition[1,1] + 1}
+      }
+      
+      # when the original observation is (0,1)
+      if (round_data$type[j-1] == 'Accommodate'){
+        if (round_data$type[j] == 'Nash(A,a)'){transition[2,3] = transition[2,3] + 1}
+        if (round_data$type[j] == 'Nash(B,b)'){transition[2,4] = transition[2,4] + 1}
+        if (round_data$type[j] == 'Accommodate'){transition[2,2] = transition[2,2] + 1}
+        if (round_data$type[j] == 'Aggressive'){transition[2,1] = transition[2,1] + 1}
+      }
+    }
+  }
+  
+  # calculate the transition probability without diagonal
+  transition_prob = transition
+  transition[1,1] = 0
+  transition[2,2] = 0
+  transition[3,3] = 0
+  transition[4,4] = 0
+  for (k in 1:4){
+    transition_prob[k,1] = round(transition[k,1] / sum(transition[k,1:4]), 2)
+    transition_prob[k,2] = round(transition[k,2] / sum(transition[k,1:4]), 2)
+    transition_prob[k,3] = round(transition[k,3] / sum(transition[k,1:4]), 2)
+    transition_prob[k,4] = round(transition[k,4] / sum(transition[k,1:4]), 2)
+    transition_prob[k,5] = sum(transition[k,1:4])
+  }
+  transition_all[[m]] = transition_prob
+}
+
+# data export
+xtable(transition_all[[1]], digits = 2, caption = as.character(treatmenttype[1]), align = 'lccccc')
+xtable(transition_all[[2]], digits = 2, caption = as.character(treatmenttype[2]), align = 'lccccc')
+xtable(transition_all[[3]], digits = 2, caption = as.character(treatmenttype[3]), align = 'lccccc')
+xtable(transition_all[[4]], digits = 2, caption = as.character(treatmenttype[4]), align = 'lccccc')
+xtable(transition_all[[5]], digits = 2, caption = as.character(treatmenttype[5]), align = 'lccccc')
+xtable(transition_all[[6]], digits = 2, caption = as.character(treatmenttype[6]), align = 'lccccc')
+
+rm(transition, transition_prob, treatment_data, round_data, transitional_all)
+
+
+##### Mechanisms_ext: Transition probability by pairs and scatter plot #####
+# set up transition matrix container
+length = rep(NA, length(uniquepairs))
+transition_pair = data.frame(session_round_pair_id = length, treatment = length,
+                             game = length, time = length, sequence = length, block = length,
+                             Nash_Ab = length, Nash_Ba = length, Nash_Nash = length)
+
+# loop over pairs
+for (i in 1:length(uniquepairs)){
+  
+  # get the pair data
+  round_data = filter(df, session_round_pair_id == uniquepairs[i])
+  
+  # set up record
+  Nash_Ab = 0
+  Nash_Ba = 0
+  Nash_Nash = 0
+  
+  # loop over observations
+  for (j in 2:length(round_data$tick)){
+    
+    # when the original observation is (1,1)
+    if (round_data$type[j-1] == 'Nash(A,a)'){
+      if (round_data$type[j] == 'Nash(A,a)'){next}
+      if (round_data$type[j] == 'Nash(B,b)'){Nash_Nash = Nash_Nash + 1}
+      if (round_data$type[j] == 'Accommodate'){Nash_Ba = Nash_Ba + 1}
+      if (round_data$type[j] == 'Aggressive'){Nash_Ab = Nash_Ab + 1}
+    }
+    
+    # when the original observation is (0,0)
+    if (round_data$type[j-1] == 'Nash(B,b)'){
+      if (round_data$type[j] == 'Nash(A,a)'){Nash_Nash = Nash_Nash + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){next}
+      if (round_data$type[j] == 'Accommodate'){Nash_Ba = Nash_Ba + 1}
+      if (round_data$type[j] == 'Aggressive'){Nash_Ab = Nash_Ab + 1}
+    }
+    
+    # when the original observation is (1,0)
+    if (round_data$type[j-1] == 'Aggressive'){
+      if (round_data$type[j] == 'Nash(A,a)'){Nash_Ab = Nash_Ab + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){Nash_Ab = Nash_Ab + 1}
+      if (round_data$type[j] == 'Accommodate'){next}
+      if (round_data$type[j] == 'Aggressive'){next}
+    }
+    
+    # when the original observation is (0,1)
+    if (round_data$type[j-1] == 'Accommodate'){
+      if (round_data$type[j] == 'Nash(A,a)'){Nash_Ba = Nash_Ba + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){Nash_Ba = Nash_Ba + 1}
+      if (round_data$type[j] == 'Accommodate'){next}
+      if (round_data$type[j] == 'Aggressive'){next}
+    }
+  }
+  
+  # update treatment info
+  transition_pair$session_round_pair_id[i] = round_data$session_round_pair_id[1]
+  transition_pair$treatment[i] = round_data$treatment[1]
+  transition_pair$game[i] = round_data$game[1]
+  transition_pair$time[i] = round_data$time[1]
+  transition_pair$sequence[i] = round_data$sequence[1]
+  transition_pair$block[i] = round_data$block[1]
+  
+  # fill out the transition related columns
+  total = Nash_Nash + Nash_Ab + Nash_Ba
+  transition_pair$Nash_Nash[i] = round(Nash_Nash / total, digits = 3)
+  transition_pair$Nash_Ab[i] = round(Nash_Ab / total, digits = 3)
+  transition_pair$Nash_Ba[i] = round(Nash_Ba /total, digits = 3)
+}
+
+# further count the size of each group
+transition_pair$group = paste(transition_pair$time, transition_pair$Nash_Ab, transition_pair$Nash_Ba, sep = '_')
+uniquegroup = unique(transition_pair$group)
+length = rep(NA, length(uniquegroup))
+df_group = data.frame(time = length, count = length, Nash_Ab = length, Nash_Ba = length)
+for (i in 1:length(uniquegroup)){
+  pair_group = filter(transition_pair, group == uniquegroup[i])
+  df_group$time[i] = pair_group$time[1]
+  df_group$Nash_Ab[i] = pair_group$Nash_Ab[1]
+  df_group$Nash_Ba[i] = pair_group$Nash_Ba[1]
+  df_group$count[i] = length(pair_group$group)
+}
+
+# draw scatter plot
+title = 'transition_scatter'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 600, height = 500)
+pic = ggplot(data = df_group) +
+  geom_point(aes(x=Nash_Ab, y=Nash_Ba, colour=time, size=count)) +
+  geom_abline(aes(intercept = 0, slope = 1), color = 'black') +
+  scale_x_continuous(name='Transition prob between Nash and (A,b)', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Transition prob between Nash and (B,a)', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), 
+                      labels=c('continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
+dev.off()
 
 
 ##### Mechanisms: First time reach NE #####
