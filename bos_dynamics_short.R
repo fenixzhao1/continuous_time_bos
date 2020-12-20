@@ -283,7 +283,7 @@ for (i in 1:length(uniquegroup)){
   df_group$count[i] = length(pair_group$group)
 }
 
-# draw scatter plot
+# draw scatter plot 1
 title = 'classification_scatter_cluster'
 file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
 file = paste(file, ".png", sep = "")
@@ -292,15 +292,37 @@ pic = ggplot(data = df_group) +
   geom_rect(aes(xmin = 0.8, ymin = 0, xmax = 1, ymax = 0.2, fill='green'), color='green') +
   geom_rect(aes(xmin = 0.8, ymin = 0.2, xmax = 1, ymax = 1, fill='yellow'), color='yellow') +
   geom_point(aes(x=nash_total, y=nash_diff, colour=time, size=count)) +
-  scale_x_continuous(name='total time at Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
-  scale_y_continuous(name='time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_x_continuous(name='Efficiency: total time at Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Fairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), 
                       labels=c('continuous','discrete')) +
   scale_fill_manual(values=c('green','yellow'), 
                     labels=c('Alternating zone','One NE zone')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
-        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.title.x = element_text(size = 20), axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+
+print(pic)
+dev.off()
+
+# draw scatter plot 2
+title = 'classification_scatter_cluster_1'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 600, height = 500)
+pic = ggplot(data = df_group) +
+  geom_rect(aes(xmin = 0.8, ymin = 0, xmax = 1, ymax = 0.2, fill='green'), color='green') +
+  geom_rect(aes(xmin = 0.8, ymin = 0.2, xmax = 1, ymax = 1, fill='yellow'), color='yellow') +
+  scale_x_continuous(name='Efficiency: total time at Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Fairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  theme_bw() + 
+  scale_colour_manual(values=c('blue','red'), 
+                      labels=c('continuous','discrete')) +
+  scale_fill_manual(values=c('green','yellow'), 
+                    labels=c('Alternating zone','One NE zone')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 20), axis.title.y = element_text(size = 20),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
 
 print(pic)

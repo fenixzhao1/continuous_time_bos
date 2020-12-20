@@ -169,10 +169,12 @@ for (i in 1:length(uniquepairs)){
   png(file, width = 500, height = 300)
   
   pic = ggplot() +
-    geom_line(data = df_pair, aes(x=period, y=type_num)) + 
-    scale_x_continuous(name='starting period', waiver(), limits=c(0,20), breaks = c(0,5,10,15,20)) +
-    scale_y_continuous(name='average length of duration at Nash', limits=c(1,4),
-                       breaks = c(1,2,3,4), labels = c('(A,b)','(A,a)','(B,b)','(B,a)')) +
+    geom_line(data = df_pair, aes(x=period, y=type_num), colour = 'blue') + 
+    geom_hline(aes(yintercept=3.5), colour = 'red', linetype = 'dotted') +
+    geom_hline(aes(yintercept=1.5), colour = 'red', linetype = 'dotted') +
+    scale_x_continuous(name='period', waiver(), limits=c(0,20), breaks = c(0,5,10,15,20)) +
+    scale_y_continuous(name='action profile', limits=c(1,4),
+                       breaks = c(1,2,3,4), labels = c('Aggressive','RPNE','CPNE','Accommodating')) +
     theme_bw() + 
     theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
           axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -182,6 +184,8 @@ for (i in 1:length(uniquepairs)){
   
   dev.off()
 }
+
+rm(df_pair, pic)
 
 
 ##### Treatment effect: Coordination rate summary table #####
@@ -1247,8 +1251,8 @@ png(file, width = 600, height = 500)
 pic = ggplot(data = df_group) +
   geom_point(aes(x=Nash_Ab, y=Nash_Ba, colour=time, size=count)) +
   geom_abline(aes(intercept = 0, slope = 1), color = 'black') +
-  scale_x_continuous(name='Transition prob between Nash and (A,b)', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
-  scale_y_continuous(name='Transition prob between Nash and (B,a)', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_x_continuous(name='Transition prob between Nash and Aggressive', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Transition prob between Nash and Accommodating', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), 
                       labels=c('continuous','discrete')) +
