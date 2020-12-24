@@ -1397,3 +1397,102 @@ print(pic)
 dev.off()
 
 rm(df_temp, df_treat, df_pair, pic, d1, d2, d3)
+
+
+##### Extension: two-step transition #####
+# filter to data when the adjacent choices are different
+df_slim = df %>% group_by(session_round_pair_id) %>% mutate(lag_type = lag(type))
+df_slim = df_slim %>% filter(type!=lag_type | is.na(lag_type))
+
+# build two-step transition
+df_slim = df_slim %>% group_by(session_round_pair_id) %>% mutate(
+  trans1 = lead(type),
+  trans2 = lead(trans1),
+  period1 = lead(period),
+  period2 = lead(period1))
+df_slim = df_slim %>% filter(is.na(trans1)==FALSE & is.na(trans2)==FALSE)
+df_slim = df_slim %>% mutate(trans_type = paste(type, trans1, trans2, sep = '_'))
+
+# collapse the data for continuous time
+df_slim_c = df_slim %>% filter(time == 'Continuous')
+uniquetrans = unique(df_slim_c$trans_type)
+length = rep(NA, length(uniquetrans))
+trans_data_c = data.frame(
+  trans0 = length, trans1 = length, trans2 = length,
+  duration1 = length, duration2 = length,
+  trans_type = length, frequency = length)
+
+for (i in 1:length(uniquetrans)){
+  df_trans = df_slim_c %>% filter(trans_type == uniquetrans[i])
+  trans_data_c$trans0[i] = df_trans$type[1]
+  trans_data_c$trans1[i] = df_trans$trans1[1]
+  trans_data_c$trans2[i] = df_trans$trans2[1]
+  trans_data_c$duration1[i] = mean(df_trans$period1 - df_trans$period)
+  trans_data_c$duration2[i] = mean(df_trans$period2 - df_trans$period1)
+  trans_data_c$trans_type[i] = uniquetrans[i]
+  trans_data_c$frequency[i] = length(df_trans$tick)
+}
+trans_data_c = trans_data_c %>% mutate(prob = round(frequency/sum(trans_data_c$frequency), digits=3))
+trans_data_c = trans_data_c %>% arrange(desc(trans_data_c$prob))
+
+# select the transitions between Nash
+trans_data_c = trans_data_c %>% filter(trans0 == 'Nash(A,a)' | trans0 == 'Nash(B,b)')
+trans_data_c = trans_data_c %>% mutate(prob1 = round(frequency/sum(trans_data_c$frequency), digits=3))
+trans_data_c = trans_data_c %>% filter(trans2 == 'Nash(A,a)' | trans2 == 'Nash(B,b)')
+trans_data_c = trans_data_c %>% mutate(prob2 = round(frequency/sum(trans_data_c$frequency), digits=3))
+
+# collapse the data for discrete time
+df_slim_d = df_slim %>% filter(time == 'Discrete')
+uniquetrans = unique(df_slim_d$trans_type)
+length = rep(NA, length(uniquetrans))
+trans_data_d = data.frame(
+  trans0 = length, trans1 = length, trans2 = length,
+  duration1 = length, duration2 = length,
+  trans_type = length, frequency = length)
+
+for (i in 1:length(uniquetrans)){
+  df_trans = df_slim_d %>% filter(trans_type == uniquetrans[i])
+  trans_data_d$trans0[i] = df_trans$type[1]
+  trans_data_d$trans1[i] = df_trans$trans1[1]
+  trans_data_d$trans2[i] = df_trans$trans2[1]
+  trans_data_d$duration1[i] = mean(df_trans$period1 - df_trans$period)
+  trans_data_d$duration2[i] = mean(df_trans$period2 - df_trans$period1)
+  trans_data_d$trans_type[i] = uniquetrans[i]
+  trans_data_d$frequency[i] = length(df_trans$tick)
+}
+trans_data_d = trans_data_d %>% mutate(prob = round(frequency/sum(trans_data_d$frequency), digits=3))
+trans_data_d = trans_data_d %>% arrange(desc(trans_data_d$prob))
+
+# select the transitions between Nash
+trans_data_d = trans_data_d %>% filter(trans0 == 'Nash(A,a)' | trans0 == 'Nash(B,b)')
+trans_data_d = trans_data_d %>% mutate(prob1 = round(frequency/sum(trans_data_d$frequency), digits=3))
+trans_data_d = trans_data_d %>% filter(trans2 == 'Nash(A,a)' | trans2 == 'Nash(B,b)')
+trans_data_d = trans_data_d %>% mutate(prob2 = round(frequency/sum(trans_data_d$frequency), digits=3))
+
+# collect all the data and make the final table for comparing three transitional dynamics
+transition_matrix = matrix(0, nrow = 2, ncol = 4)
+rownames(transition_matrix) = c('Continuous', 'Discrete')
+colnames(transition_matrix) = c('Disadvantaged', 'Advantaged', 'Direct', 'Fail')
+
+# fill out the table for continuous time row 1
+subset = filter(trans_data_c, trans0!=trans2 & trans1=='Aggressive')
+transition_matrix[1,1] = sum(subset$prob2)
+subset = filter(trans_data_c, trans0!=trans2 & trans1=='Accommodate')
+transition_matrix[1,2] = sum(subset$prob2)
+subset = filter(trans_data_c, trans1=='Nash(A,a)' | trans1=='Nash(B,b)')
+transition_matrix[1,3] = sum(subset$prob2)
+transition_matrix[1,4] = 1 - sum(transition_matrix[1,1:3])
+
+# fill out the table for discrete time row 2
+subset = filter(trans_data_d, trans0!=trans2 & trans1=='Aggressive')
+transition_matrix[2,1] = sum(subset$prob2)
+subset = filter(trans_data_d, trans0!=trans2 & trans1=='Accommodate')
+transition_matrix[2,2] = sum(subset$prob2)
+subset = filter(trans_data_d, trans1=='Nash(A,a)' | trans1=='Nash(B,b)')
+transition_matrix[2,3] = sum(subset$prob2)
+transition_matrix[2,4] = 1 - sum(transition_matrix[2,1:3])
+
+# get table output and remove table
+xtable(transition_matrix, digits = 2, label = 'two_step_transition', align = 'lcccc')
+rm(df_slim, df_slim_c, df_slim_d, df_trans, subset)
+rm(trans_data_c, trans_data_d, transition_matrix)
