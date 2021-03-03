@@ -92,15 +92,16 @@ df = df %>% mutate(p1_payoff = payoff1Aa*p1_strategy*p2_strategy + payoff1Ab*p1_
 # add treatment variables
 df = df %>% mutate(time = ifelse(num_subperiods==0, 'Continuous', 'Discrete'),
                    continuous = ifelse(num_subperiods==0, 1, 0),
-                   tool_type = ifelse(communication==2, 'Freetext', ifelse(communication==1, 'Messaging', ifelse(signal_exist==TRUE, 'Signal', 'Control'))),
-                   freetext = ifelse(communication==2, 1, 0),
-                   messaging = ifelse(communication==1, 1, 0),
+                   tool_type = ifelse(communication==2, 'Chatbox', ifelse(communication==1, 'Message', ifelse(signal_exist==TRUE, 'Signal', 'Control'))),
+                   chatbox = ifelse(communication==2, 1, 0),
+                   message = ifelse(communication==1, 1, 0),
                    signal = ifelse(signal_exist==TRUE, 1, 0))
 df$treatment = paste(df$time, df$tool_type, sep = '_')
 
 # add learning dummies
 df = df %>% mutate(block = ifelse(round <= 7, 1, 2))
 df = df %>% mutate(period = tick+1)
+df = df %>% mutate(tick_second = round(period/2, digits = 1))
 
 # add behaivoral type dummies
 df = df %>% mutate(type = NA)
@@ -118,7 +119,6 @@ for(m in 1:length(df$tick)){
   if(df$p1_strategy[m]==1 & df$p2_strategy[m]==0){
     df$type[m]="Aggressive"
     df$type_num[m]=1}
-  #if(df$num_subperiods[m]==0){df$period[m] = round((df$tick[m]+1)/12,digits=2)}
 }
 df = df %>% mutate(Nash_rpne = ifelse(type=='RPNE', 1, 0))
 df = df %>% mutate(Nash_cpne = ifelse(type=='CPNE', 1, 0))
@@ -170,12 +170,12 @@ rm(df_pair, pic)
 # create summary table
 summary = matrix(NA, nrow = 2, ncol = 4)
 rownames(summary) = c('coor_rate', 'diff')
-colnames(summary) = c('Control', 'Free Text', 'Messaging', 'Signal')
+colnames(summary) = c('Control', 'Chatbox', 'Message', 'Signal')
 
 # set up sub dataset
 df_control = filter(df, treatment == 'Continuous_Control')
-df_freetext = filter(df, treatment == 'Continuous_Freetext')
-df_messaging = filter(df, treatment == 'Continuous_Messaging')
+df_freetext = filter(df, treatment == 'Continuous_Chatbox')
+df_messaging = filter(df, treatment == 'Continuous_Message')
 df_signal = filter(df, treatment == 'Continuous_Signal')
 
 # fill out the table
@@ -243,7 +243,7 @@ pic = ggplot() +
   scale_x_discrete(name='time tick', waiver(), limits=c(5,50,100,150,200,240)) +
   scale_y_continuous(name='coordination rate', limits=c(0.3,1)) +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'messaging', 'free text')) +
+  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'message', 'chatbox')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -286,7 +286,7 @@ pic = ggplot() +
   scale_x_discrete(name='supergame', waiver(), limits=c(3,6,9,12)) +
   scale_y_continuous(name='coordination rate', limits=c(0.3,1)) +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'messaging', 'free text')) +
+  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'message', 'chatbox')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -337,7 +337,7 @@ write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stat
 
 # generate distribution table
 sum_pair = matrix(NA, nrow = 4, ncol = 2)
-rownames(sum_pair) = c('Control', 'Free Text', 'Signal', 'Messaging')
+rownames(sum_pair) = c('Control', 'Chatbox', 'Signal', 'Message')
 colnames(sum_pair) = c('Alternating', 'One NE')
 for (i in 1:length(treatmenttype)){
   df_treat = filter(pair_summary, treatment == treatmenttype[i])
@@ -347,8 +347,8 @@ for (i in 1:length(treatmenttype)){
 
 # add statistical testing result
 df_control = filter(pair_summary, treatment == 'Continuous_Control')
-df_freetext = filter(pair_summary, treatment == 'Continuous_Freetext')
-df_messaging = filter(pair_summary, treatment == 'Continuous_Messaging')
+df_freetext = filter(pair_summary, treatment == 'Continuous_Chatbox')
+df_messaging = filter(pair_summary, treatment == 'Continuous_Message')
 df_signal = filter(pair_summary, treatment == 'Continuous_Signal')
 
 sum_pair2 = matrix(NA, nrow = 3, ncol = 2)
@@ -452,8 +452,8 @@ df_stay = filter(df_stay, is.na(treatment) == FALSE)
 
 # draw distribution plot
 df_control = filter(df_stay, treatment == 'Continuous_Control')
-df_freetext = filter(df_stay, treatment == 'Continuous_Freetext')
-df_messaging = filter(df_stay, treatment == 'Continuous_Messaging')
+df_freetext = filter(df_stay, treatment == 'Continuous_Chatbox')
+df_messaging = filter(df_stay, treatment == 'Continuous_Message')
 df_signal = filter(df_stay, treatment == 'Continuous_Signal')
 df_signal = filter(df_signal, length > 2)
 
@@ -470,7 +470,7 @@ pic = ggplot() +
   scale_x_continuous(name='duration(time tick)', waiver(), limits=c(0,150), breaks = c(0,10,20,50,100,150)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'messaging', 'free text')) +
+  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'message', 'chatbox')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -494,7 +494,7 @@ rownames(transition) = c('Aggressive at t', 'Accommodate at t', 'RPNE at t', 'CP
 colnames(transition) = c('Aggressive at t+1', 'Accommodate at t+1', 'RPNE at t+1', 'CPNE at t+1', '# of obs')
 
 # select treatment
-treatment_data = subset(df, treatment == 'Continuous_Freetext')
+treatment_data = subset(df, treatment == 'Continuous_Chatbox')
 pairs = unique(treatment_data$session_round_pair_id)
 
 # loop over pairs
@@ -620,7 +620,7 @@ for (j in 1:length(treatmenttype)){
 
 # collect all the data and make the final table for comparing three transitional dynamics
 transition_matrix = matrix(0, nrow = 4, ncol = 4)
-rownames(transition_matrix) = c('Control', 'Freetext', 'Signal', 'Messaging')
+rownames(transition_matrix) = c('Control', 'Chatbox', 'Signal', 'Message')
 colnames(transition_matrix) = c('Disadvantaged', 'Advantaged', 'Direct', 'Fail')
 
 # fill out the table
