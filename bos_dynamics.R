@@ -1,15 +1,12 @@
 ##### Individual analysis for each session #####
-# generate random payment round
-round(runif(1,4,15), digits = 0)
-
 # load packages
 library(ggplot2) # overwrite heatmap in latticeExtra
 library(dplyr)
 
 # load data
-full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_testing_10_5.csv", header = T)
-full_data$round = as.double(substring(full_data$subsession_id, 2, 3))
-#full_data$round = full_data$subsession_id
+full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_20.csv", header = T)
+#full_data$round = as.double(substring(full_data$subsession_id, 2, 3))
+full_data$round = full_data$subsession_id
 full_data = arrange(full_data, full_data$session_code, full_data$subsession_id, full_data$id_in_subsession, full_data$tick)
 
 # create pair id
@@ -33,7 +30,7 @@ for (i in 1:length(uniquepairs)){
   pairdata = subset(full_data, session_round_pair_id == uniquepairs[i])
   
   title = paste(as.character(uniquepairs[i]))
-  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/10_5/", title, sep = "")
+  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/4_20/", title, sep = "")
   file = paste(file, ".png", sep = "")
   
   png(file, width = 700, height = 400)
@@ -93,6 +90,34 @@ df = rbind(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)
 df = arrange(df, df$session_code, df$subsession_id, df$id_in_subsession, df$tick)
 rm(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)
 
+# make up added columns
+df = df %>% mutate(
+  communication = 0,
+  signal_exist = FALSE,
+  signal_freq = 10,
+  signaltwo_exist = FALSE,
+  signaltwo_freq = 10,
+  signalthree_exist = FALSE
+)
+
+# add new sessions after revision
+df_9 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_8.csv", header = T)
+df_9 = df_9 %>% mutate(sequence = 1)
+df_9$round = df_9$subsession_id
+df_10 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_16_1.csv", header = T)
+df_10 = df_10 %>% mutate(sequence = 2)
+df_10$round = as.double(substring(df_10$subsession_id, 3, 4))
+df_11 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_16_2.csv", header = T)
+df_11 = df_11 %>% mutate(sequence = 2)
+df_11$round = as.double(substring(df_11$subsession_id, 3, 4))
+df_12 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_20.csv", header = T)
+df_12 = df_12 %>% mutate(sequence = 1)
+df_12$round = df_12$subsession_id
+
+df = rbind(df, df_9, df_10, df_11, df_12)
+df = arrange(df, df$session_code, df$subsession_id, df$id_in_subsession, df$tick)
+rm(df_9, df_10, df_11, df_12)
+
 # create pair id
 df$pair_id = paste(df$p1_code, df$p2_code, sep = "_")
 df$round_pair_id = paste(df$round, df$pair_id,  sep = "_")
@@ -104,12 +129,13 @@ df = filter(df, round > 3)
 
 # add treatment variables
 df = df %>% mutate(game = ifelse(payoff1Bb == 280, "BoS1.4", ifelse(payoff1Bb == 160, "BoS2.5", "BoS10")))
-df = df %>% mutate(time = ifelse(num_subperiods==0, 'Continuous', 'Discrete'))
+df = df %>% mutate(time = ifelse(num_subperiods!=0, 'Discrete', ifelse(signalthree_exist==TRUE, 'Hybrid', 'Continuous')))
 df$treatment = paste(df$time, df$game, sep = '_')
 df = df %>% mutate(BoS1.4 = ifelse(payoff1Bb == 280,1,0))
 df = df %>% mutate(BoS2.5 = ifelse(payoff1Bb == 160,1,0))
 df = df %>% mutate(BoS10 = ifelse(payoff1Bb == 40,1,0))
 df = df %>% mutate(continuous = ifelse(num_subperiods==0, 1, 0))
+df = df %>% mutate(hybrid = ifelse(time == 'Hybrid', 1, 0))
 
 # add payoff variables and NE variables
 df = df %>% mutate(p1_payoff = payoff1Aa*p1_strategy*p2_strategy + payoff1Ab*p1_strategy*(1-p2_strategy) + payoff1Ba*(1-p1_strategy)*p2_strategy + payoff1Bb*(1-p1_strategy)*(1-p2_strategy))
@@ -148,6 +174,7 @@ for(m in 1:length(df$tick)){
 
 # create unique ids and pairs
 uniquepairs = unique(df$session_round_pair_id)
+uniquetime = unique(df$time)
 gametype = unique(df$game)
 treatmenttype = unique(df$treatment)
 uniquePlayer = union(unique(df$p1_code), unique(df$p2_code))
@@ -156,6 +183,50 @@ uniquePlayer = union(unique(df$p1_code), unique(df$p2_code))
 df_stata = df
 df_stata = df_stata %>% rename(BoS1_4 = BoS1.4, BoS2_5 = BoS2.5)
 write_dta(df_stata, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos.dta")
+rm(df_stata)
+
+# generate pair level dataset
+df_2 = df
+#df_2 = filter(df, period > 10)
+length = rep(NA, length(uniquepairs))
+pair_summary = data.frame(session_round_pair_id = length, treatment = length, coordinate = length,
+                          game = length, time = length, sequence = length, block = length,
+                          nash_total = length, nash_diff = length, type = length)
+
+# loop over pairs for classification
+for (i in 1:length(uniquepairs)){
+  df_pair = filter(df_2, session_round_pair_id == uniquepairs[i])
+  
+  # update treatment info
+  pair_summary$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
+  pair_summary$treatment[i] = df_pair$treatment[1]
+  pair_summary$game[i] = df_pair$game[1]
+  pair_summary$time[i] = df_pair$time[1]
+  pair_summary$sequence[i] = df_pair$sequence[1]
+  pair_summary$block[i] = df_pair$block[1]
+  pair_summary$coordinate[i] = mean(df_pair$coordinate)
+  pair_summary$nash_total[i] = round(mean(df_pair$coordinate), digits=2)
+  pair_summary$nash_diff[i] = round(abs(mean(df_pair$Nash_Aa) - mean(df_pair$Nash_Bb)), digits=2)
+  
+  # classify turn taking and one NE dynamics
+  if (mean(df_pair$coordinate) >= 0.8){
+    if (abs(mean(df_pair$Nash_Aa) - mean(df_pair$Nash_Bb)) <= 0.2 )
+    {pair_summary$type[i] = 'alternating'}
+    else{pair_summary$type[i] = 'one NE'}
+  }
+  else{
+    pair_summary$type[i] = 'others'
+  }
+}
+
+# recreate frequency dataset
+pair_summary = pair_summary %>% mutate(alternating = ifelse(type=='alternating', 1, 0))
+pair_summary = pair_summary %>% mutate(one_ne = ifelse(type=='one NE', 1, 0))
+pair_summary = pair_summary %>% mutate(others = ifelse(type=='others', 1, 0))
+
+# export stata data
+write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos_pair_full.dta")
+rm(df_pair, df_2)
 
 
 ##### Pair analysis: subjects dynamics #####
@@ -188,11 +259,11 @@ for (i in 1:length(uniquepairs)){
 rm(df_pair, pic)
 
 
-##### Treatment effect: Coordination rate summary table #####
+##### (not use) Treatment effect: Coordination rate summary table #####
 # create summary table
-summary = matrix(NA, nrow = 5, ncol = 3)
+summary = matrix(NA, nrow = 5, ncol = 6)
 rownames(summary) = c('BoS1.4', 'BoS1.4-BoS2.5', 'BoS2.5', 'BoS2.5-BoS10', 'BoS10')
-colnames(summary) = c('Continuous', 'Discrete', 'Continuous-Discrete')
+colnames(summary) = c('Continuous', 'Discrete', 'Hybrid', 'C-D', 'C-H', 'D-H')
 
 # set up sub dataset
 df_c1 = filter(df, treatment == 'Continuous_BoS1.4')
@@ -201,99 +272,254 @@ df_c10 = filter(df, treatment == 'Continuous_BoS10')
 df_d1 = filter(df, treatment == 'Discrete_BoS1.4')
 df_d2 = filter(df, treatment == 'Discrete_BoS2.5')
 df_d10 = filter(df, treatment == 'Discrete_BoS10')
+df_h1 = filter(df, treatment == 'Hybrid_BoS1.4')
+df_h2 = filter(df, treatment == 'Hybrid_BoS2.5')
+df_h10 = filter(df, treatment == 'Hybrid_BoS10')
 
 # fill out the table
 summary[1,1] = mean(df_c1$coordinate)
 summary[1,2] = mean(df_d1$coordinate)
-summary[1,3] = mean(df_c1$coordinate) - mean(df_d1$coordinate)
+summary[1,3] = mean(df_h1$coordinate)
+summary[1,4] = mean(df_c1$coordinate) - mean(df_d1$coordinate)
+summary[1,5] = mean(df_c1$coordinate) - mean(df_h1$coordinate)
+summary[1,6] = mean(df_d1$coordinate) - mean(df_h1$coordinate)
 
 summary[2,1] = mean(df_c1$coordinate) - mean(df_c2$coordinate)
 summary[2,2] = mean(df_d1$coordinate) - mean(df_d2$coordinate)
+summary[2,3] = mean(df_h1$coordinate) - mean(df_h2$coordinate)
 
 summary[3,1] = mean(df_c2$coordinate)
 summary[3,2] = mean(df_d2$coordinate)
-summary[3,3] = mean(df_c2$coordinate) - mean(df_d2$coordinate)
+summary[3,3] = mean(df_h2$coordinate)
+summary[3,4] = mean(df_c2$coordinate) - mean(df_d2$coordinate)
+summary[3,5] = mean(df_c2$coordinate) - mean(df_h2$coordinate)
+summary[3,6] = mean(df_d2$coordinate) - mean(df_h2$coordinate)
 
 summary[4,1] = mean(df_c2$coordinate) - mean(df_c10$coordinate)
 summary[4,2] = mean(df_d2$coordinate) - mean(df_d10$coordinate)
+summary[4,3] = mean(df_h2$coordinate) - mean(df_h10$coordinate)
 
 summary[5,1] = mean(df_c10$coordinate)
 summary[5,2] = mean(df_d10$coordinate)
-summary[5,3] = mean(df_c10$coordinate) - mean(df_d10$coordinate)
+summary[5,3] = mean(df_h10$coordinate)
+summary[5,4] = mean(df_c10$coordinate) - mean(df_d10$coordinate)
+summary[5,5] = mean(df_c10$coordinate) - mean(df_h10$coordinate)
+summary[5,6] = mean(df_d10$coordinate) - mean(df_h10$coordinate)
 
 # wilcox-test for each relations
-test_c1_d1 = t.test(df_c1$coordinate, df_d1$coordinate, 
-                         alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_c2_d2 = t.test(df_c2$coordinate, df_d2$coordinate, 
-                         alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_c10_d10 = t.test(df_c10$coordinate, df_d10$coordinate, 
-                           alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_c1_c2 = t.test(df_c1$coordinate, df_c2$coordinate, 
-                         alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_d1_d2 = t.test(df_d1$coordinate, df_d2$coordinate, 
-                         alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_c2_c10 = t.test(df_c2$coordinate, df_c10$coordinate, 
-                          alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_d2_d10 = t.test(df_d2$coordinate, df_d10$coordinate, 
-                          alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-
-# update p value for each test
+test_c1_d1 = wilcox.test(df_c1$coordinate, df_d1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c2_d2 = wilcox.test(df_c2$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c10_d10 = wilcox.test(df_c10$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
 print(test_c1_d1$p.value)
 print(test_c2_d2$p.value)
 print(test_c10_d10$p.value)
+
+test_c1_h1 = wilcox.test(df_c1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c2_h2 = wilcox.test(df_c2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c10_h10 = wilcox.test(df_c10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_c1_h1$p.value)
+print(test_c2_h2$p.value)
+print(test_c10_h10$p.value)
+
+test_d1_h1 = wilcox.test(df_d1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d2_h2 = wilcox.test(df_d2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d10_h10 = wilcox.test(df_d10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_d1_h1$p.value)
+print(test_d2_h2$p.value)
+print(test_d10_h10$p.value)
+
+test_c1_c2 = wilcox.test(df_c1$coordinate, df_c2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d1_d2 = wilcox.test(df_d1$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_h1_h2 = wilcox.test(df_h1$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
 print(test_c1_c2$p.value)
 print(test_d1_d2$p.value)
+print(test_h1_h2$p.value)
+
+test_c2_c10 = wilcox.test(df_c2$coordinate, df_c10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
+test_d2_d10 = wilcox.test(df_d2$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
+test_h2_h10 = wilcox.test(df_h2$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
 print(test_c2_c10$p.value)
 print(test_d2_d10$p.value)
+print(test_h2_h10$p.value)
 
 # table output
-xtable(summary, digits = 2, label = 'summary_table', align = 'lccc')
-rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, summary)
-rm(test_c1_d1, test_c2_d2, test_c10_d10, test_c1_c2, test_d1_d2, test_c2_c10, test_d2_d10)
+xtable(summary, digits = 3, label = 'summary_table', align = 'lcccccc')
+rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_h1, df_h2, df_h10, summary)
+rm(test_c1_d1, test_c2_d2, test_c10_d10, test_c1_c2, test_d1_d2, test_c2_c10, test_d2_d10,
+   test_c1_h1, test_c2_h2, test_c10_h10, test_d1_h1, test_d2_h2, test_d10_h10, test_h1_h2, test_h2_h10)
 
 
-##### Treatment effect: Coordination rate summary by pairs#####
-length = rep(NA, length(uniquepairs))
-pair_summary = data.frame(session_round_pair_id = length, treatment = length, coordinate = length,
-                          game = length, time = length, sequence = length, block = length)
+##### Treatment effect: Coordination rate summary table at pair level#####
+# create summary table
+summary = matrix(NA, nrow = 5, ncol = 6)
+rownames(summary) = c('BoS1.4', 'BoS1.4-BoS2.5', 'BoS2.5', 'BoS2.5-BoS10', 'BoS10')
+colnames(summary) = c('Continuous', 'Discrete', 'Hybrid', 'C-D', 'C-H', 'D-H')
 
-# loop over pairs for classification
-for (i in 1:length(uniquepairs)){
-  df_pair = filter(df, session_round_pair_id == uniquepairs[i])
-  
-  # update treatment info
-  pair_summary$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
-  pair_summary$treatment[i] = df_pair$treatment[1]
-  pair_summary$game[i] = df_pair$game[1]
-  pair_summary$time[i] = df_pair$time[1]
-  pair_summary$sequence[i] = df_pair$sequence[1]
-  pair_summary$block[i] = df_pair$block[1]
-  pair_summary$coordinate[i] = mean(df_pair$coordinate)
-}
+# set up sub dataset
+df_c1 = filter(pair_summary, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(pair_summary, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(pair_summary, treatment == 'Continuous_BoS10')
+df_d1 = filter(pair_summary, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(pair_summary, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(pair_summary, treatment == 'Discrete_BoS10')
+df_h1 = filter(pair_summary, treatment == 'Hybrid_BoS1.4')
+df_h2 = filter(pair_summary, treatment == 'Hybrid_BoS2.5')
+df_h10 = filter(pair_summary, treatment == 'Hybrid_BoS10')
 
-# export stata data
-write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos_pair3.dta")
+# fill out the table
+summary[1,1] = mean(df_c1$coordinate)
+summary[1,2] = mean(df_d1$coordinate)
+summary[1,3] = mean(df_h1$coordinate)
+summary[1,4] = mean(df_c1$coordinate) - mean(df_d1$coordinate)
+summary[1,5] = mean(df_c1$coordinate) - mean(df_h1$coordinate)
+summary[1,6] = mean(df_d1$coordinate) - mean(df_h1$coordinate)
 
-# check distribution
-df_c = filter(pair_summary, time == 'Continuous')
-df_d = filter(pair_summary, time == 'Discrete')
+summary[2,1] = mean(df_c1$coordinate) - mean(df_c2$coordinate)
+summary[2,2] = mean(df_d1$coordinate) - mean(df_d2$coordinate)
+summary[2,3] = mean(df_h1$coordinate) - mean(df_h2$coordinate)
 
-# set up plot
-pic = ggplot() +
-  stat_density(geom = "line", data=df_c, aes(x=coordinate, colour='blue')) +
-  stat_density(geom = "line", data=df_d, aes(x=coordinate, colour='red')) +
-  scale_x_continuous(name='coordinate rate', waiver()) +
-  scale_y_continuous(name='density') +
-  theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
-  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
-        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
-        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+summary[3,1] = mean(df_c2$coordinate)
+summary[3,2] = mean(df_d2$coordinate)
+summary[3,3] = mean(df_h2$coordinate)
+summary[3,4] = mean(df_c2$coordinate) - mean(df_d2$coordinate)
+summary[3,5] = mean(df_c2$coordinate) - mean(df_h2$coordinate)
+summary[3,6] = mean(df_d2$coordinate) - mean(df_h2$coordinate)
 
-print(pic)
+summary[4,1] = mean(df_c2$coordinate) - mean(df_c10$coordinate)
+summary[4,2] = mean(df_d2$coordinate) - mean(df_d10$coordinate)
+summary[4,3] = mean(df_h2$coordinate) - mean(df_h10$coordinate)
+
+summary[5,1] = mean(df_c10$coordinate)
+summary[5,2] = mean(df_d10$coordinate)
+summary[5,3] = mean(df_h10$coordinate)
+summary[5,4] = mean(df_c10$coordinate) - mean(df_d10$coordinate)
+summary[5,5] = mean(df_c10$coordinate) - mean(df_h10$coordinate)
+summary[5,6] = mean(df_d10$coordinate) - mean(df_h10$coordinate)
+
+# wilcox-test for each relations
+test_c1_d1 = wilcox.test(df_c1$coordinate, df_d1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c2_d2 = wilcox.test(df_c2$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c10_d10 = wilcox.test(df_c10$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_c1_d1$p.value)
+print(test_c2_d2$p.value)
+print(test_c10_d10$p.value)
+
+# test_c1_d1 = t.test(df_c1$coordinate, df_d1$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_c2_d2 = t.test(df_c2$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_c10_d10 = t.test(df_c10$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+#                            mu = 0, conf.level = 0.95)
+# print(test_c1_d1$p.value)
+# print(test_c2_d2$p.value)
+# print(test_c10_d10$p.value)
+
+test_c1_h1 = wilcox.test(df_c1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c2_h2 = wilcox.test(df_c2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_c10_h10 = wilcox.test(df_c10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_c1_h1$p.value)
+print(test_c2_h2$p.value)
+print(test_c10_h10$p.value)
+
+# test_c1_h1 = t.test(df_c1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_c2_h2 = t.test(df_c2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_c10_h10 = t.test(df_c10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+#                            mu = 0, conf.level = 0.95)
+# print(test_c1_h1$p.value)
+# print(test_c2_h2$p.value)
+# print(test_c10_h10$p.value)
+
+test_d1_h1 = wilcox.test(df_d1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d2_h2 = wilcox.test(df_d2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d10_h10 = wilcox.test(df_d10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                           mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_d1_h1$p.value)
+print(test_d2_h2$p.value)
+print(test_d10_h10$p.value)
+
+# test_d1_h1 = t.test(df_d1$coordinate, df_h1$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_d2_h2 = t.test(df_d2$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_d10_h10 = t.test(df_d10$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+#                            mu = 0, conf.level = 0.95)
+# print(test_d1_h1$p.value)
+# print(test_d2_h2$p.value)
+# print(test_d10_h10$p.value)
+
+test_c1_c2 = wilcox.test(df_c1$coordinate, df_c2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_d1_d2 = wilcox.test(df_d1$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+test_h1_h2 = wilcox.test(df_h1$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+                         mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_c1_c2$p.value)
+print(test_d1_d2$p.value)
+print(test_h1_h2$p.value)
+
+# test_c1_c2 = t.test(df_c1$coordinate, df_c2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_d1_d2 = t.test(df_d1$coordinate, df_d2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# test_h1_h2 = t.test(df_h1$coordinate, df_h2$coordinate, alternative = 'two.sided', 
+#                          mu = 0, conf.level = 0.95)
+# print(test_c1_c2$p.value)
+# print(test_d1_d2$p.value)
+# print(test_h1_h2$p.value)
+
+test_c2_c10 = wilcox.test(df_c2$coordinate, df_c10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
+test_d2_d10 = wilcox.test(df_d2$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
+test_h2_h10 = wilcox.test(df_h2$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+                          mu = 0, conf.level = 0.95, paired = FALSE)
+print(test_c2_c10$p.value)
+print(test_d2_d10$p.value)
+print(test_h2_h10$p.value)
+
+# test_c2_c10 = t.test(df_c2$coordinate, df_c10$coordinate, alternative = 'two.sided', 
+#                           mu = 0, conf.level = 0.95)
+# test_d2_d10 = t.test(df_d2$coordinate, df_d10$coordinate, alternative = 'two.sided', 
+#                           mu = 0, conf.level = 0.95)
+# test_h2_h10 = t.test(df_h2$coordinate, df_h10$coordinate, alternative = 'two.sided', 
+#                           mu = 0, conf.level = 0.95)
+# print(test_c2_c10$p.value)
+# print(test_d2_d10$p.value)
+# print(test_h2_h10$p.value)
+
+# table output
+xtable(summary, digits = 3, label = 'summary_table', align = 'lcccccc')
+rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_h1, df_h2, df_h10, summary)
+rm(test_c1_d1, test_c2_d2, test_c10_d10, test_c1_c2, test_d1_d2, test_c2_c10, test_d2_d10,
+   test_c1_h1, test_c2_h2, test_c10_h10, test_d1_h1, test_d2_h2, test_d10_h10, test_h1_h2, test_h2_h10)
 
 
-##### Treatment effect: Coordination learning within each super game #####
+##### Treatment effect: learning within each super game #####
 # build six treatments over time dataset
 df_treat = list()
 for (i in 1:length(treatmenttype)){
@@ -304,13 +530,13 @@ for (i in 1:length(treatmenttype)){
   )
 }
 
-# DTW distance
-d1 = dtw(df_treat[[1]]$coordinate_rate, df_treat[[4]]$coordinate_rate)
-d2 = dtw(df_treat[[2]]$coordinate_rate, df_treat[[5]]$coordinate_rate)
-d3 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[6]]$coordinate_rate)
-d1$normalizedDistance
-d2$normalizedDistance
-d3$normalizedDistance
+# # DTW distance
+# d1 = dtw(df_treat[[1]]$coordinate_rate, df_treat[[4]]$coordinate_rate)
+# d2 = dtw(df_treat[[2]]$coordinate_rate, df_treat[[5]]$coordinate_rate)
+# d3 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[6]]$coordinate_rate)
+# d1$normalizedDistance
+# d2$normalizedDistance
+# d3$normalizedDistance
 
 # set up plot
 title = 'coordination_within_supergames'
@@ -324,10 +550,13 @@ pic = ggplot() +
   geom_line(data=df_treat[[4]], aes(x=period, y=coordinate_rate, colour='red', linetype='solid')) +
   geom_line(data=df_treat[[5]], aes(x=period, y=coordinate_rate, colour='red', linetype='longdash')) +
   geom_line(data=df_treat[[6]], aes(x=period, y=coordinate_rate, colour='red', linetype='dotted')) +
+  geom_line(data=df_treat[[7]], aes(x=period, y=coordinate_rate, colour='black', linetype='solid')) +
+  geom_line(data=df_treat[[8]], aes(x=period, y=coordinate_rate, colour='black', linetype='longdash')) +
+  geom_line(data=df_treat[[9]], aes(x=period, y=coordinate_rate, colour='black', linetype='dotted')) +
   scale_x_discrete(name='period', waiver(), limits=c(0,20)) +
   scale_y_continuous(name='coordination rate', limits=c(0.3,1)) +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -336,12 +565,12 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-rm(df_temp, df_treat, pic, d1, d2, d3)
+rm(df_temp, df_treat, pic)
 
 
-##### Treatment effect: Coordination learning between super games #####
+##### (not use) Treatment effect: learning between super games #####
 # create summary table
-learning = matrix(NA, nrow = length(treatmenttype), ncol = 3)
+learning = matrix(NA, nrow = length(uniquetime), ncol = 3)
 rownames(learning) = treatmenttype
 colnames(learning) = c('Game4-9', 'Game10-15', '(G10-15)-(G4-9)')
 
@@ -354,9 +583,6 @@ for (i in 1:length(treatmenttype)){
   learning[i,1] = mean(df_treat_1$coordinate)
   learning[i,2] = mean(df_treat_2$coordinate)
   learning[i,3] = mean(df_treat_2$coordinate) - mean(df_treat_1$coordinate)
-  test = t.test(df_treat_2$coordinate, df_treat_1$coordinate, 
-                alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-  print(test$p.value)
 }
 
 # table output
@@ -364,7 +590,7 @@ xtable(learning, digits = 2, label = 'learn_between', align = 'lccc')
 rm(df_treat, df_treat_1, df_treat_2, test, learning)
 
 
-##### Treatment effect: Order effect #####
+##### (not use) Treatment effect: Order effect #####
 # create summary table
 ordereffect = matrix(NA, nrow = length(treatmenttype), ncol = 3)
 rownames(ordereffect) = treatmenttype
@@ -379,8 +605,10 @@ for (i in 1:length(treatmenttype)){
   ordereffect[i,1] = mean(df_treat_1$coordinate)
   ordereffect[i,2] = mean(df_treat_2$coordinate)
   ordereffect[i,3] = mean(df_treat_1$coordinate) - mean(df_treat_2$coordinate)
-  test = t.test(df_treat_1$coordinate, df_treat_2$coordinate, 
-                alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
+  
+  # wilcox-test for the comparison
+  test = wilcox.test(df_treat_1$coordinate, df_treat_2$coordinate, alternative = 'two.sided', 
+                     mu = 0, conf.level = 0.95, paired = FALSE)
   print(test$p.value)
 }
 
@@ -389,7 +617,7 @@ xtable(ordereffect, digits = 2, label = 'order_effect', align = 'lccc')
 rm(df_treat, df_treat_1, df_treat_2, test, ordereffect)
 
 
-##### Mechanisms: Pair-level classification #####
+##### (not use) Mechanisms: Pair-level classification #####
 # set up dataset and parameters
 #df_2 = filter(df, period > 10)
 df_2 = df
@@ -497,7 +725,7 @@ rm(df_2, df_pair, pair_summary, sum_pair, sum_pair2, test)
 rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_treat)
 
 
-##### Mechanisms: Pair classification showcase #####
+##### (not use) Mechanisms: Pair classification showcase #####
 # set up dataset and parameters
 df_2 = filter(df, period > 10)
 length = rep(NA, length(uniquepairs))
@@ -619,6 +847,9 @@ df_c10 = filter(df_stay, treatment == 'Continuous_BoS10')
 df_d1 = filter(df_stay, treatment == 'Discrete_BoS1.4')
 df_d2 = filter(df_stay, treatment == 'Discrete_BoS2.5')
 df_d10 = filter(df_stay, treatment == 'Discrete_BoS10')
+df_h1 = filter(df_stay, treatment == 'Hybrid_BoS1.4')
+df_h2 = filter(df_stay, treatment == 'Hybrid_BoS2.5')
+df_h10 = filter(df_stay, treatment == 'Hybrid_BoS10')
 
 # set up plot
 title = 'distribution_duration_nash'
@@ -632,10 +863,13 @@ pic = ggplot() +
   stat_ecdf(geom="step", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
   stat_ecdf(geom="step", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
   stat_ecdf(geom="step", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_h10, aes(x=length_period, colour='black', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_h2, aes(x=length_period, colour='black', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_h1, aes(x=length_period, colour='black', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -644,12 +878,12 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-# K-S test
-ks.test(df_c10$length_period, df_d10$length_period)
-ks.test(df_c2$length_period, df_d2$length_period)
-ks.test(df_c1$length_period, df_d1$length_period)
+# # K-S test
+# ks.test(df_c10$length_period, df_d10$length_period)
+# ks.test(df_c2$length_period, df_d2$length_period)
+# ks.test(df_c1$length_period, df_d1$length_period)
 
-rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10)
+rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_h1, df_h2, df_h10)
 rm(df_length, df_char, df_pair, df_stay, pic)
 
 ## stay at Mismatch
@@ -718,6 +952,9 @@ df_c10 = filter(df_stay, treatment == 'Continuous_BoS10')
 df_d1 = filter(df_stay, treatment == 'Discrete_BoS1.4')
 df_d2 = filter(df_stay, treatment == 'Discrete_BoS2.5')
 df_d10 = filter(df_stay, treatment == 'Discrete_BoS10')
+df_h1 = filter(df_stay, treatment == 'Hybrid_BoS1.4')
+df_h2 = filter(df_stay, treatment == 'Hybrid_BoS2.5')
+df_h10 = filter(df_stay, treatment == 'Hybrid_BoS10')
 
 # set up plot
 title = 'distribution_duration_mismatch'
@@ -731,10 +968,13 @@ pic = ggplot() +
   stat_ecdf(geom="step", data=df_d10, aes(x=length_period, colour='red', linetype='solid')) +
   stat_ecdf(geom="step", data=df_d2, aes(x=length_period, colour='red', linetype='longdash')) +
   stat_ecdf(geom="step", data=df_d1, aes(x=length_period, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_h10, aes(x=length_period, colour='black', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_h2, aes(x=length_period, colour='black', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_h1, aes(x=length_period, colour='black', linetype='dotted')) +
   scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -743,12 +983,12 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-# K-S test
-ks.test(df_c10$length_period, df_d10$length_period)
-ks.test(df_c2$length_period, df_d2$length_period)
-ks.test(df_c1$length_period, df_d1$length_period)
+# # K-S test
+# ks.test(df_c10$length_period, df_d10$length_period)
+# ks.test(df_c2$length_period, df_d2$length_period)
+# ks.test(df_c1$length_period, df_d1$length_period)
 
-rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10)
+rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_h1, df_h2, df_h10)
 rm(df_length, df_char, df_pair, df_stay, pic)
 
 
@@ -850,6 +1090,23 @@ for (i in 1:length(uniquetime)){
 }
 df_stay_davg = arrange(df_stay_davg, df_stay_davg$time, df_stay_davg$start_time)
 
+# further generate the average length at time tick in hybrid time
+df_stay_h = filter(df_stay, time == 'Hybrid')
+uniquetime = unique(df_stay_h$start_time)
+length = rep(NA, length(uniquetime))
+df_stay_havg = data.frame(
+  session_round_pair_id = length, treatment = length, time = length,
+  length_period = length, start_time = length)
+for (i in 1:length(uniquetime)){
+  df_sub = filter(df_stay_h, start_time == uniquetime[i])
+  df_stay_havg$session_round_pair_id[i] = df_sub$session_round_pair_id[1]
+  df_stay_havg$treatment[i] = df_sub$treatment[1]
+  df_stay_havg$time[i] = df_sub$time[1]
+  df_stay_havg$length_period[i] = mean(df_sub$length_period)
+  df_stay_havg$start_time[i] = df_sub$start_time[1]
+}
+df_stay_havg = arrange(df_stay_havg, df_stay_havg$time, df_stay_havg$start_time)
+
 # plot the relation between start time and length of stay in two time environments
 title = 'duration_nash_squeeze_over_time'
 file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
@@ -858,10 +1115,11 @@ png(file, width = 700, height = 300)
 pic = ggplot() +
   geom_line(data = df_stay_cavg, aes(x=start_time, y=length_period, colour='blue')) + 
   geom_line(data = df_stay_davg, aes(x=start_time, y=length_period, colour='red')) + 
+  geom_line(data = df_stay_havg, aes(x=start_time, y=length_period, colour='black')) + 
   scale_x_continuous(name='starting period', waiver(), limits=c(0,20), breaks = c(1,5,10,15,19,20)) +
   scale_y_continuous(name='average length of duration at Nash') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -870,10 +1128,10 @@ print(pic)
 dev.off()
 
 rm(df_char, df_length, df_pair, df_stay, df_stay_c, df_stay_cavg)
-rm(df_stay_d, df_stay_davg, df_sub, pic)
+rm(df_stay_d, df_stay_davg, df_stay_h, df_stay_havg, df_sub, pic)
 
 
-##### Mechanisms_ext: Whether the interaction is more frequent over time #####
+##### (not use) Mechanisms_ext: Whether the interaction is more frequent over time #####
 # add column see whether subjects switch between profiles
 df_int = filter(df, floor(period)-period == 0)
 df_int = df_int %>% group_by(session_round_pair_id) %>% mutate(
@@ -920,6 +1178,7 @@ transition = matrix(0, nrow = 4, ncol = 5)
 rownames(transition) = c('(A,b) at t', '(B,a) at t', '(A,a) at t', '(B,b) at t')
 colnames(transition) = c('(A,b) at t+1', '(B,a) at t+1', '(A,a) at t+1', '(B,b) at t+1', '# of obs')
 
+## Continuous time
 # select treatment
 treatment_data = subset(df, time == 'Continuous')
 pairs = unique(treatment_data$session_round_pair_id)
@@ -1068,16 +1327,95 @@ for (k in 1:4){
 }
 transition_d2 = transition_prob
 
+## Discrete time
+# create transition matrix
+transition = matrix(0, nrow = 4, ncol = 5)
+rownames(transition) = c('(A,b) at t', '(B,a) at t', '(A,a) at t', '(B,b) at t')
+colnames(transition) = c('(A,b) at t+1', '(B,a) at t+1', '(A,a) at t+1', '(B,b) at t+1', '# of obs')
+
+# select treatment
+treatment_data = subset(df, time == 'Hybrid')
+pairs = unique(treatment_data$session_round_pair_id)
+
+# loop over pairs
+for (i in 1:length(pairs)){
+  round_data = subset(treatment_data, session_round_pair_id == pairs[i])
+  
+  # loop over observations
+  for (j in 2:length(round_data$tick)){
+    
+    # when the original observation is (1,1)
+    if (round_data$type[j-1] == 'Nash(A,a)'){
+      if (round_data$type[j] == 'Nash(A,a)'){transition[3,3] = transition[3,3] + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){transition[3,4] = transition[3,4] + 1}
+      if (round_data$type[j] == 'Accommodate'){transition[3,2] = transition[3,2] + 1}
+      if (round_data$type[j] == 'Aggressive'){transition[3,1] = transition[3,1] + 1}
+    }
+    
+    # when the original observation is (0,0)
+    if (round_data$type[j-1] == 'Nash(B,b)'){
+      if (round_data$type[j] == 'Nash(A,a)'){transition[4,3] = transition[4,3] + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){transition[4,4] = transition[4,4] + 1}
+      if (round_data$type[j] == 'Accommodate'){transition[4,2] = transition[4,2] + 1}
+      if (round_data$type[j] == 'Aggressive'){transition[4,1] = transition[4,1] + 1}
+    }
+    
+    # when the original observation is (1,0)
+    if (round_data$type[j-1] == 'Aggressive'){
+      if (round_data$type[j] == 'Nash(A,a)'){transition[1,3] = transition[1,3] + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){transition[1,4] = transition[1,4] + 1}
+      if (round_data$type[j] == 'Accommodate'){transition[1,2] = transition[1,2] + 1}
+      if (round_data$type[j] == 'Aggressive'){transition[1,1] = transition[1,1] + 1}
+    }
+    
+    # when the original observation is (0,1)
+    if (round_data$type[j-1] == 'Accommodate'){
+      if (round_data$type[j] == 'Nash(A,a)'){transition[2,3] = transition[2,3] + 1}
+      if (round_data$type[j] == 'Nash(B,b)'){transition[2,4] = transition[2,4] + 1}
+      if (round_data$type[j] == 'Accommodate'){transition[2,2] = transition[2,2] + 1}
+      if (round_data$type[j] == 'Aggressive'){transition[2,1] = transition[2,1] + 1}
+    }
+  }
+}
+
+# calculate transition probability
+transition_prob = transition
+for (k in 1:4){
+  transition_prob[k,1] = round(transition[k,1] / sum(transition[k,1:4]), 2)
+  transition_prob[k,2] = round(transition[k,2] / sum(transition[k,1:4]), 2)
+  transition_prob[k,3] = round(transition[k,3] / sum(transition[k,1:4]), 2)
+  transition_prob[k,4] = round(transition[k,4] / sum(transition[k,1:4]), 2)
+  transition_prob[k,5] = sum(transition[k,1:4])
+}
+transition_h = transition_prob
+
+# calculate the transition probability without diagonal
+transition_prob = transition
+transition[1,1] = 0
+transition[2,2] = 0
+transition[3,3] = 0
+transition[4,4] = 0
+for (k in 1:4){
+  transition_prob[k,1] = round(transition[k,1] / sum(transition[k,1:4]), 2)
+  transition_prob[k,2] = round(transition[k,2] / sum(transition[k,1:4]), 2)
+  transition_prob[k,3] = round(transition[k,3] / sum(transition[k,1:4]), 2)
+  transition_prob[k,4] = round(transition[k,4] / sum(transition[k,1:4]), 2)
+  transition_prob[k,5] = sum(transition[k,1:4])
+}
+transition_h2 = transition_prob
+
 # data export
 xtable(transition_c, digits = 2, label = 'transition_c', align = 'lccccc')
 xtable(transition_d, digits = 2, label = 'transition_d', align = 'lccccc')
+xtable(transition_h, digits = 2, label = 'transition_h', align = 'lccccc')
 xtable(transition_c2, digits = 2, label = 'transition_c_nod', align = 'lccccc')
 xtable(transition_d2, digits = 2, label = 'transition_d_nod', align = 'lccccc')
+xtable(transition_h2, digits = 2, label = 'transition_h_nod', align = 'lccccc')
 rm(treatment_data, round_data, transition, transition_prob)
-rm(transition_c, transition_d, transition_c2, transition_d2)
+rm(transition_c, transition_d, transition_c2, transition_d2, transition_h, transition_h2)
 
 
-##### Mechanisms_ext: Transition probability matrix by all treatments #####
+##### (not use) Mechanisms_ext: Transition probability matrix by all treatments #####
 # set up transition matrix container
 transition_all = list()
 
@@ -1250,12 +1588,12 @@ file = paste(file, ".png", sep = "")
 png(file, width = 600, height = 500)
 pic = ggplot(data = df_group) +
   geom_point(aes(x=Nash_Ab, y=Nash_Ba, colour=time, size=count)) +
-  geom_abline(aes(intercept = 0, slope = 1), color = 'black') +
+  geom_abline(aes(intercept = 0, slope = 1), color = 'green') +
   scale_x_continuous(name='Transition prob between Nash and Aggressive', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   scale_y_continuous(name='Transition prob between Nash and Accommodating', waiver(), limits=c(0,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), 
-                      labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('blue','red','black'), 
+                      labels=c('continuous','discrete', 'hybrid')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -1266,7 +1604,7 @@ dev.off()
 
 ##### Mechanisms: First time reach NE #####
 length = rep(NA, length(uniquepairs))
-pair_summary = data.frame(session_round_pair_id = length, treatment = length, 
+pair_summary1 = data.frame(session_round_pair_id = length, treatment = length, 
                           game = length, time = length, timing = length)
   
 # loop over pairs for classification
@@ -1274,15 +1612,15 @@ for (i in 1:length(uniquepairs)){
   df_pair = filter(df, session_round_pair_id == uniquepairs[i])
   
   # update treatment info
-  pair_summary$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
-  pair_summary$treatment[i] = df_pair$treatment[1]
-  pair_summary$game[i] = df_pair$game[1]
-  pair_summary$time[i] = df_pair$time[1]
+  pair_summary1$session_round_pair_id[i] = df_pair$session_round_pair_id[1]
+  pair_summary1$treatment[i] = df_pair$treatment[1]
+  pair_summary1$game[i] = df_pair$game[1]
+  pair_summary1$time[i] = df_pair$time[1]
   
   # update first Nash timing
   for (j in 1:length(df_pair$tick)){
     if (df_pair$coordinate[j] == 1){
-      pair_summary$timing[i] = df_pair$period[j]
+      pair_summary1$timing[i] = df_pair$period[j]
       break
     }
     else{next}
@@ -1290,12 +1628,15 @@ for (i in 1:length(uniquepairs)){
 }
 
 # draw distribution plot
-df_c1 = filter(pair_summary, treatment == 'Continuous_BoS1.4')
-df_c2 = filter(pair_summary, treatment == 'Continuous_BoS2.5')
-df_c10 = filter(pair_summary, treatment == 'Continuous_BoS10')
-df_d1 = filter(pair_summary, treatment == 'Discrete_BoS1.4')
-df_d2 = filter(pair_summary, treatment == 'Discrete_BoS2.5')
-df_d10 = filter(pair_summary, treatment == 'Discrete_BoS10')
+df_c1 = filter(pair_summary1, treatment == 'Continuous_BoS1.4')
+df_c2 = filter(pair_summary1, treatment == 'Continuous_BoS2.5')
+df_c10 = filter(pair_summary1, treatment == 'Continuous_BoS10')
+df_d1 = filter(pair_summary1, treatment == 'Discrete_BoS1.4')
+df_d2 = filter(pair_summary1, treatment == 'Discrete_BoS2.5')
+df_d10 = filter(pair_summary1, treatment == 'Discrete_BoS10')
+df_h1 = filter(pair_summary1, treatment == 'Hybrid_BoS1.4')
+df_h2 = filter(pair_summary1, treatment == 'Hybrid_BoS2.5')
+df_h10 = filter(pair_summary1, treatment == 'Hybrid_BoS10')
 
 # set up plot
 title = 'timing_first_ne'
@@ -1304,16 +1645,18 @@ file = paste(file, ".png", sep = "")
 png(file, width = 700, height = 300)
 pic = ggplot() +
   stat_ecdf(geom="step", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) + 
-  stat_ecdf(geom="step", data=df_c10, aes(x=timing, colour='blue', linetype='solid')) +
   stat_ecdf(geom="step", data=df_c2, aes(x=timing, colour='blue', linetype='longdash')) +
   stat_ecdf(geom="step", data=df_c1, aes(x=timing, colour='blue', linetype='dotted')) +
   stat_ecdf(geom="step", data=df_d10, aes(x=timing, colour='red', linetype='solid')) +
   stat_ecdf(geom="step", data=df_d2, aes(x=timing, colour='red', linetype='longdash')) +
   stat_ecdf(geom="step", data=df_d1, aes(x=timing, colour='red', linetype='dotted')) +
+  stat_ecdf(geom="step", data=df_h10, aes(x=timing, colour='black', linetype='solid')) +
+  stat_ecdf(geom="step", data=df_h2, aes(x=timing, colour='black', linetype='longdash')) +
+  stat_ecdf(geom="step", data=df_h1, aes(x=timing, colour='black', linetype='dotted')) +
   scale_x_continuous(name='timing(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -1322,13 +1665,13 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-# K-S test
-ks.test(df_c10$timing, df_d10$timing)
-ks.test(df_c2$timing, df_d2$timing)
-ks.test(df_c1$timing, df_d1$timing)
+# # K-S test
+# ks.test(df_c10$timing, df_d10$timing)
+# ks.test(df_c2$timing, df_d2$timing)
+# ks.test(df_c1$timing, df_d1$timing)
 
-rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10)
-rm(df_pair, pair_summary, pic)
+rm(df_c1, df_c2, df_c10, df_d1, df_d2, df_d10, df_h1, df_h2, df_h10)
+rm(df_pair, pair_summary1, pic)
 
 
 ##### Mechanisms: Payoff inequality #####
@@ -1364,13 +1707,13 @@ for (i in 1:length(treatmenttype)){
   )
 }
 
-# DTW distance
-d1 = dtw(df_treat[[1]]$payoff_diff, df_treat[[4]]$payoff_diff)
-d2 = dtw(df_treat[[2]]$payoff_diff, df_treat[[5]]$payoff_diff)
-d3 = dtw(df_treat[[3]]$payoff_diff, df_treat[[6]]$payoff_diff)
-d1$normalizedDistance
-d2$normalizedDistance
-d3$normalizedDistance
+# # DTW distance
+# d1 = dtw(df_treat[[1]]$payoff_diff, df_treat[[4]]$payoff_diff)
+# d2 = dtw(df_treat[[2]]$payoff_diff, df_treat[[5]]$payoff_diff)
+# d3 = dtw(df_treat[[3]]$payoff_diff, df_treat[[6]]$payoff_diff)
+# d1$normalizedDistance
+# d2$normalizedDistance
+# d3$normalizedDistance
 
 # set up plot
 title = 'inequality_within_supergames'
@@ -1384,10 +1727,13 @@ pic = ggplot() +
   geom_line(data=df_treat[[4]], aes(x=period, y=payoff_diff, colour='red', linetype='solid')) +
   geom_line(data=df_treat[[5]], aes(x=period, y=payoff_diff, colour='red', linetype='longdash')) +
   geom_line(data=df_treat[[6]], aes(x=period, y=payoff_diff, colour='red', linetype='dotted')) +
+  geom_line(data=df_treat[[7]], aes(x=period, y=payoff_diff, colour='black', linetype='solid')) +
+  geom_line(data=df_treat[[8]], aes(x=period, y=payoff_diff, colour='black', linetype='longdash')) +
+  geom_line(data=df_treat[[9]], aes(x=period, y=payoff_diff, colour='black', linetype='dotted')) +
   scale_x_discrete(name='period', waiver(), limits=c(0,20)) +
   scale_y_continuous(name='difference of cumulative payoff') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red'), labels=c('continuous','discrete')) +
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
   scale_linetype_manual(values=c('solid', 'longdash', 'dotted'), labels=c('BoS1.4', 'BoS2.5', 'BoS10')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
@@ -1396,7 +1742,7 @@ pic = ggplot() +
 print(pic)
 dev.off()
 
-rm(df_temp, df_treat, df_pair, pic, d1, d2, d3)
+rm(df_temp, df_new, df_treat, df_pair, pic)
 
 
 ##### Extension: two-step transition #####
@@ -1469,9 +1815,37 @@ trans_data_d = trans_data_d %>% mutate(prob1 = round(frequency/sum(trans_data_d$
 trans_data_d = trans_data_d %>% filter(trans2 == 'Nash(A,a)' | trans2 == 'Nash(B,b)')
 trans_data_d = trans_data_d %>% mutate(prob2 = round(frequency/sum(trans_data_d$frequency), digits=3))
 
+# collapse the data for hybrid time
+df_slim_h = df_slim %>% filter(time == 'Hybrid')
+uniquetrans = unique(df_slim_h$trans_type)
+length = rep(NA, length(uniquetrans))
+trans_data_h = data.frame(
+  trans0 = length, trans1 = length, trans2 = length,
+  duration1 = length, duration2 = length,
+  trans_type = length, frequency = length)
+
+for (i in 1:length(uniquetrans)){
+  df_trans = df_slim_h %>% filter(trans_type == uniquetrans[i])
+  trans_data_h$trans0[i] = df_trans$type[1]
+  trans_data_h$trans1[i] = df_trans$trans1[1]
+  trans_data_h$trans2[i] = df_trans$trans2[1]
+  trans_data_h$duration1[i] = mean(df_trans$period1 - df_trans$period)
+  trans_data_h$duration2[i] = mean(df_trans$period2 - df_trans$period1)
+  trans_data_h$trans_type[i] = uniquetrans[i]
+  trans_data_h$frequency[i] = length(df_trans$tick)
+}
+trans_data_h = trans_data_h %>% mutate(prob = round(frequency/sum(trans_data_h$frequency), digits=3))
+trans_data_h = trans_data_h %>% arrange(desc(trans_data_h$prob))
+
+# select the transitions between Nash
+trans_data_h = trans_data_h %>% filter(trans0 == 'Nash(A,a)' | trans0 == 'Nash(B,b)')
+trans_data_h = trans_data_h %>% mutate(prob1 = round(frequency/sum(trans_data_h$frequency), digits=3))
+trans_data_h = trans_data_h %>% filter(trans2 == 'Nash(A,a)' | trans2 == 'Nash(B,b)')
+trans_data_h = trans_data_h %>% mutate(prob2 = round(frequency/sum(trans_data_h$frequency), digits=3))
+
 # collect all the data and make the final table for comparing three transitional dynamics
-transition_matrix = matrix(0, nrow = 2, ncol = 4)
-rownames(transition_matrix) = c('Continuous', 'Discrete')
+transition_matrix = matrix(0, nrow = 3, ncol = 4)
+rownames(transition_matrix) = c('Continuous', 'Discrete', 'Hybrid')
 colnames(transition_matrix) = c('Disadvantaged', 'Advantaged', 'Direct', 'Fail')
 
 # fill out the table for continuous time row 1
@@ -1492,7 +1866,16 @@ subset = filter(trans_data_d, trans1=='Nash(A,a)' | trans1=='Nash(B,b)')
 transition_matrix[2,3] = sum(subset$prob2)
 transition_matrix[2,4] = 1 - sum(transition_matrix[2,1:3])
 
+# fill out the table for hybrid time row 3
+subset = filter(trans_data_h, trans0!=trans2 & trans1=='Aggressive')
+transition_matrix[3,1] = sum(subset$prob2)
+subset = filter(trans_data_h, trans0!=trans2 & trans1=='Accommodate')
+transition_matrix[3,2] = sum(subset$prob2)
+subset = filter(trans_data_h, trans1=='Nash(A,a)' | trans1=='Nash(B,b)')
+transition_matrix[3,3] = sum(subset$prob2)
+transition_matrix[3,4] = 1 - sum(transition_matrix[2,1:3])
+
 # get table output and remove table
-xtable(transition_matrix, digits = 2, label = 'two_step_transition', align = 'lcccc')
-rm(df_slim, df_slim_c, df_slim_d, df_trans, subset)
-rm(trans_data_c, trans_data_d, transition_matrix)
+xtable(transition_matrix, digits = 3, label = 'two_step_transition', align = 'lcccc')
+rm(df_slim, df_slim_c, df_slim_d, df_slim_h, df_trans, subset)
+rm(trans_data_c, trans_data_d, trans_data_h, transition_matrix)

@@ -4,7 +4,7 @@ library(ggplot2) # overwrite heatmap in latticeExtra
 library(dplyr)
 
 # load data
-full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_25_2.csv", header = T)
+full_data = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_bar_4_16_2.csv", header = T)
 full_data$round = as.double(substring(full_data$subsession_id, 3, 4))
 #full_data$round = full_data$subsession_id
 full_data = arrange(full_data, full_data$session_code, full_data$subsession_id, full_data$id_in_subsession, full_data$tick)
@@ -16,7 +16,7 @@ full_data$session_round_pair_id = paste(full_data$session_code, full_data$round_
 
 # drop first 2 seconds and first 3 games
 full_data = filter(full_data, tick > 3)
-full_data = filter(full_data, round > 2)
+full_data = filter(full_data, round > 3)
 
 # create unique ids and pairs
 uniquepairs = unique(full_data$session_round_pair_id)
@@ -30,7 +30,7 @@ for (i in 1:length(uniquepairs)){
   pairdata = subset(full_data, session_round_pair_id == uniquepairs[i])
   
   title = paste(as.character(uniquepairs[i]))
-  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/2_25_2/", title, sep = "")
+  file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/data/figures_pair/4_16_2/", title, sep = "")
   file = paste(file, ".png", sep = "")
   
   png(file, width = 700, height = 400)
@@ -44,6 +44,8 @@ for (i in 1:length(uniquepairs)){
   
   dev.off()
 }
+
+rm(full_data, pairdata)
 
 
 ##### Data preparation #####
@@ -63,15 +65,18 @@ df_3 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_25
 df_3$round = as.double(substring(df_3$subsession_id, 3, 4))
 df_4 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_25_2.csv", header = T, stringsAsFactors = FALSE)
 df_4$round = as.double(substring(df_4$subsession_id, 3, 4))
+df_5 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_3_9.csv", header = T, stringsAsFactors = FALSE)
+df_5$round = as.double(substring(df_5$subsession_id, 2, 3))
 
 # load chat data
 df_chat = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_17_2_chat.csv", header = T, stringsAsFactors = FALSE)
-df_message = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_25_2_message.csv", header = T, stringsAsFactors = FALSE)
+df_message_1 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_2_25_2_message.csv", header = T, stringsAsFactors = FALSE)
+df_message_2 = read.csv("D:/Dropbox/Working Papers/Continuous Time BOS/data/bos_new_3_9_message.csv", header = T, stringsAsFactors = FALSE)
 
 # combine all session data
-df = rbind(df_1, df_2, df_3, df_4)
+df = rbind(df_1, df_2, df_3, df_4, df_5)
 df = arrange(df, df$session_code, df$subsession_id, df$id_in_subsession, df$tick)
-rm(df_1, df_2, df_3, df_4)
+rm(df_1, df_2, df_3, df_4, df_5)
 
 # create pair id
 df$pair_id = paste(df$p1_code, df$p2_code, sep = "_")
@@ -92,7 +97,7 @@ df = df %>% mutate(p1_payoff = payoff1Aa*p1_strategy*p2_strategy + payoff1Ab*p1_
 # add treatment variables
 df = df %>% mutate(time = ifelse(num_subperiods==0, 'Continuous', 'Discrete'),
                    continuous = ifelse(num_subperiods==0, 1, 0),
-                   tool_type = ifelse(communication==2, 'Chatbox', ifelse(communication==1, 'Message', ifelse(signal_exist==TRUE, 'Signal', 'Control'))),
+                   tool_type = ifelse(communication==2, 'Chatbox', ifelse(communication==1&signal_exist==TRUE, 'Message_Signal', ifelse(communication==1, 'Message', ifelse(signal_exist==TRUE, 'Signal', 'Control')))),
                    chatbox = ifelse(communication==2, 1, 0),
                    message = ifelse(communication==1, 1, 0),
                    signal = ifelse(signal_exist==TRUE, 1, 0))
@@ -168,26 +173,29 @@ rm(df_pair, pic)
 
 ##### Treatment effect: Coordination rate summary table #####
 # create summary table
-summary = matrix(NA, nrow = 2, ncol = 4)
+summary = matrix(NA, nrow = 2, ncol = 5)
 rownames(summary) = c('coor_rate', 'diff')
-colnames(summary) = c('Control', 'Chatbox', 'Message', 'Signal')
+colnames(summary) = c('Control', 'Chatbox', 'Message', 'Signal', 'Message_Signal')
 
 # set up sub dataset
 df_control = filter(df, treatment == 'Continuous_Control')
 df_freetext = filter(df, treatment == 'Continuous_Chatbox')
 df_messaging = filter(df, treatment == 'Continuous_Message')
 df_signal = filter(df, treatment == 'Continuous_Signal')
+df_message_signal = filter(df, treatment == 'Continuous_Message_Signal')
 
 # fill out the table
 summary[1,1] = mean(df_control$coordinate, na.rm = TRUE)
 summary[1,2] = mean(df_freetext$coordinate, na.rm = TRUE)
 summary[1,3] = mean(df_messaging$coordinate, na.rm = TRUE)
 summary[1,4] = mean(df_signal$coordinate, na.rm = TRUE)
+summary[1,5] = mean(df_message_signal$coordinate, na.rm = TRUE)
 
 summary[2,1] = summary[1,1] - summary[1,1]
 summary[2,2] = summary[1,2] - summary[1,1]
 summary[2,3] = summary[1,3] - summary[1,1]
 summary[2,4] = summary[1,4] - summary[1,1]
+summary[2,5] = summary[1,5] - summary[1,1]
 
 # wilcox-test for each relations
 test_freetext = t.test(df_freetext$coordinate, df_control$coordinate, 
@@ -195,20 +203,20 @@ test_freetext = t.test(df_freetext$coordinate, df_control$coordinate,
 test_messaging = t.test(df_messaging$coordinate, df_control$coordinate, 
                          alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
 test_signal = t.test(df_signal$coordinate, df_control$coordinate, 
-                           alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
-test_treat = t.test(df_signal$coordinate, df_messaging$coordinate, 
                      alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
+test_message_signal = t.test(df_message_signal$coordinate, df_control$coordinate, 
+                             alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
 
 # update p value for each test
 print(test_freetext$p.value)
 print(test_messaging$p.value)
 print(test_signal$p.value)
-print(test_treat$p.value)
+print(test_message_signal$p.value)
 
 # table output
 xtable(summary, digits = 2, label = 'summary_table', align = 'lcccc')
-rm(df_control, df_freetext, df_messaging, df_signal)
-rm(summary, test_freetext, test_messaging, test_signal, test_treat)
+rm(df_control, df_freetext, df_messaging, df_signal, df_message_signal)
+rm(summary, test_freetext, test_messaging, test_signal, test_message_signal)
 
 
 ##### Treatment effect: Coordination learning within each super game #####
@@ -223,12 +231,14 @@ for (i in 1:length(treatmenttype)){
 }
 
 # DTW distance
-d1 = dtw(df_treat[[2]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
-d2 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
-d3 = dtw(df_treat[[4]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
+d1 = dtw(df_treat[[1]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d2 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d3 = dtw(df_treat[[4]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d4 = dtw(df_treat[[5]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
 d1$normalizedDistance
 d2$normalizedDistance
 d3$normalizedDistance
+d4$normalizedDistance
 
 # set up plot
 title = 'stage2_coordination_within_supergames'
@@ -240,10 +250,11 @@ pic = ggplot() +
   geom_line(data=df_treat[[2]], aes(x=period, y=coordinate_rate, colour='red')) +
   geom_line(data=df_treat[[3]], aes(x=period, y=coordinate_rate, colour='green')) +
   geom_line(data=df_treat[[4]], aes(x=period, y=coordinate_rate, colour='purple')) +
+  geom_line(data=df_treat[[5]], aes(x=period, y=coordinate_rate, colour='orange')) +
   scale_x_discrete(name='time tick', waiver(), limits=c(5,50,100,150,200,240)) +
   scale_y_continuous(name='coordination rate', limits=c(0.3,1)) +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'message', 'chatbox')) +
+  scale_colour_manual(values=c('blue', 'green', 'purple', 'red'), labels=c('control', 'signal', 'message', 'chatbox')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -266,12 +277,14 @@ for (i in 1:length(treatmenttype)){
 }
 
 # DTW distance
-d1 = dtw(df_treat[[2]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
-d2 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
-d3 = dtw(df_treat[[4]]$coordinate_rate, df_treat[[1]]$coordinate_rate)
+d1 = dtw(df_treat[[1]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d2 = dtw(df_treat[[3]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d3 = dtw(df_treat[[4]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
+d4 = dtw(df_treat[[5]]$coordinate_rate, df_treat[[2]]$coordinate_rate)
 d1$normalizedDistance
 d2$normalizedDistance
 d3$normalizedDistance
+d4$normalizedDistance
 
 # set up plot
 title = 'stage2_coordination_between_supergames'
@@ -299,7 +312,7 @@ rm(df_temp, df_treat, pic, d1, d2, d3)
 
 ##### Mechanisms: Pair-level classification #####
 # set up dataset and parameters
-df_2 = filter(df, period > 120)
+#df_2 = filter(df, period > 120)
 df_2 = df
 length = rep(NA, length(uniquepairs))
 pair_summary = data.frame(session_round_pair_id = length, treatment = length,
@@ -336,8 +349,8 @@ pair_summary = pair_summary %>% mutate(others = ifelse(type=='others', 1, 0))
 write_dta(pair_summary, "D:/Dropbox/Working Papers/Continuous Time BOS/data/stata_bos_new_pair.dta")
 
 # generate distribution table
-sum_pair = matrix(NA, nrow = 4, ncol = 2)
-rownames(sum_pair) = c('Control', 'Chatbox', 'Signal', 'Message')
+sum_pair = matrix(NA, nrow = 5, ncol = 2)
+rownames(sum_pair) = treatmenttype
 colnames(sum_pair) = c('Alternating', 'One NE')
 for (i in 1:length(treatmenttype)){
   df_treat = filter(pair_summary, treatment == treatmenttype[i])
@@ -350,9 +363,10 @@ df_control = filter(pair_summary, treatment == 'Continuous_Control')
 df_freetext = filter(pair_summary, treatment == 'Continuous_Chatbox')
 df_messaging = filter(pair_summary, treatment == 'Continuous_Message')
 df_signal = filter(pair_summary, treatment == 'Continuous_Signal')
+df_message_signal = filter(pair_summary, treatment == 'Continuous_Message_Signal')
 
-sum_pair2 = matrix(NA, nrow = 3, ncol = 2)
-rownames(sum_pair2) = c('R2-R1', 'R3-R1', 'R4-R1')
+sum_pair2 = matrix(NA, nrow = 4, ncol = 2)
+rownames(sum_pair2) = c('R2-R1', 'R3-R1', 'R4-R1', 'R5-R1')
 
 sum_pair2[1,1] = sum_pair[2,1] - sum_pair[1,1]
 sum_pair2[1,2] = sum_pair[2,2] - sum_pair[1,2]
@@ -378,6 +392,15 @@ test = t.test(df_messaging$alternating, df_control$alternating,
               alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
 print(test$p.value)
 test = t.test(df_messaging$one_ne, df_control$one_ne, 
+              alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
+print(test$p.value)
+
+sum_pair2[4,1] = sum_pair[4,1] - sum_pair[1,1]
+sum_pair2[4,2] = sum_pair[4,2] - sum_pair[1,2]
+test = t.test(df_message_signal$alternating, df_control$alternating, 
+              alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
+print(test$p.value)
+test = t.test(df_message_signal$one_ne, df_control$one_ne, 
               alternative = 'two.sided', mu = 0, conf.level = 0.95, var.equal = FALSE)
 print(test$p.value) 
 
@@ -456,6 +479,7 @@ df_freetext = filter(df_stay, treatment == 'Continuous_Chatbox')
 df_messaging = filter(df_stay, treatment == 'Continuous_Message')
 df_signal = filter(df_stay, treatment == 'Continuous_Signal')
 df_signal = filter(df_signal, length > 2)
+df_message_signal = filter(df_stay, treatment == 'Continuous_Message_Signal')
 
 # set up plot
 title = 'stage2_distribution_duration_nash'
@@ -467,10 +491,11 @@ pic = ggplot() +
   stat_ecdf(geom="step", data=df_freetext, aes(x=length, colour='red')) +
   stat_ecdf(geom="step", data=df_signal, aes(x=length, colour='green')) +
   stat_ecdf(geom="step", data=df_messaging, aes(x=length, colour='purple')) +
+  stat_ecdf(geom="step", data=df_message_signal, aes(x=length, colour='orange')) +
   scale_x_continuous(name='duration(time tick)', waiver(), limits=c(0,150), breaks = c(0,10,20,50,100,150)) +
   scale_y_continuous(name='density') +
   theme_bw() + 
-  scale_colour_manual(values=c('blue','red','green','purple'), labels=c('control', 'signal', 'message', 'chatbox')) +
+  scale_colour_manual(values=c('blue', 'green', 'orange', 'purple', 'red'), labels=c('control', 'signal', 'message_signal', 'message', 'chatbox')) +
   theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
         axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
@@ -619,8 +644,8 @@ for (j in 1:length(treatmenttype)){
 }
 
 # collect all the data and make the final table for comparing three transitional dynamics
-transition_matrix = matrix(0, nrow = 4, ncol = 4)
-rownames(transition_matrix) = c('Control', 'Chatbox', 'Signal', 'Message')
+transition_matrix = matrix(0, nrow = 5, ncol = 4)
+rownames(transition_matrix) = treatmenttype
 colnames(transition_matrix) = c('Disadvantaged', 'Advantaged', 'Direct', 'Fail')
 
 # fill out the table
@@ -642,6 +667,7 @@ rm(df_slim, df_treat, df_trans, subset, transition_matrix, trans_data)
 
 ##### Extension: Chat data overview #####
 # reconstruct the message data
+df_message = df_message_2
 df_message = df_message %>% select(-c(participant.label, participant._is_bot, participant._index_in_pages,
                                       participant._max_page_index, participant._current_app_name, participant._current_page_name,
                                       participant.time_started, participant.visited, participant.mturk_worker_id,
