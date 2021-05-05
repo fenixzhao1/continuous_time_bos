@@ -341,7 +341,7 @@ pic = ggplot(data = df_group) +
   geom_rect(aes(xmin = 0.8, ymin = 0.2, xmax = 1, ymax = 1, fill='yellow'), color='yellow') +
   geom_point(aes(x=nash_total, y=nash_diff, colour=time, size=count)) +
   scale_x_continuous(name='Efficiency: total time at Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
-  scale_y_continuous(name='Fairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Unfairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red','black'), 
                       labels=c('continuous','discrete','hybrid')) +
@@ -363,7 +363,7 @@ pic = ggplot(data = df_group) +
   geom_rect(aes(xmin = 0.8, ymin = 0, xmax = 1, ymax = 0.2, fill='green'), color='green') +
   geom_rect(aes(xmin = 0.8, ymin = 0.2, xmax = 1, ymax = 1, fill='yellow'), color='yellow') +
   scale_x_continuous(name='Efficiency: total time at Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
-  scale_y_continuous(name='Fairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
+  scale_y_continuous(name='Unfairness: time difference in two pure Nash', waiver(), limits=c(-0.001,1.001), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   theme_bw() + 
   scale_colour_manual(values=c('blue','red'), 
                       labels=c('continuous','discrete')) +
