@@ -1879,3 +1879,99 @@ transition_matrix[3,4] = 1 - sum(transition_matrix[2,1:3])
 xtable(transition_matrix, digits = 3, label = 'two_step_transition', align = 'lcccc')
 rm(df_slim, df_slim_c, df_slim_d, df_slim_h, df_trans, subset)
 rm(trans_data_c, trans_data_d, trans_data_h, transition_matrix)
+
+
+##### Extension: two-step transition duration of stay at transition 1 & 2#####
+df_slim = df %>% group_by(session_round_pair_id) %>% mutate(lag_type = lag(type))
+df_slim = df_slim %>% filter(type!=lag_type | is.na(lag_type))
+
+# build two-step transition
+df_slim = df_slim %>% group_by(session_round_pair_id) %>% mutate(
+  trans1 = lead(type),
+  trans2 = lead(trans1),
+  period1 = lead(period),
+  period2 = lead(period1))
+df_slim = df_slim %>% filter(is.na(trans1)==FALSE & is.na(trans2)==FALSE)
+df_slim = df_slim %>% mutate(trans_type = paste(type, trans1, trans2, sep = '_'))
+df_slim = df_slim %>% filter(type == 'Nash(A,a)' | type == 'Nash(B,b)')
+df_slim = df_slim %>% filter(trans2 == 'Nash(A,a)' | trans2 == 'Nash(B,b)')
+df_slim = df_slim %>% mutate(duration1 = period1 - period)
+df_slim = df_slim %>% mutate(duration2 = period2 - period1)
+
+
+## duration at NE in disadvantaged-player dynamics
+df_temp = filter(df_slim, type!=trans2 & trans1=='Aggressive')
+df_c = filter(df_temp, time == 'Continuous')
+df_d = filter(df_temp, time == 'Discrete')
+df_h = filter(df_temp, time == 'Hybrid')
+
+# set up plot
+title = 'distribution_duration_nash_disadv'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 700, height = 300)
+pic = ggplot() +
+  stat_ecdf(geom="step", data=df_c, aes(x=duration1, colour='blue')) +
+  stat_ecdf(geom="step", data=df_d, aes(x=duration1, colour='red')) +
+  stat_ecdf(geom="step", data=df_h, aes(x=duration1, colour='black')) +
+  scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
+  scale_y_continuous(name='density') +
+  theme_bw() + 
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+print(pic)
+dev.off()
+
+
+## duration at NE in advantaged-player dynamics
+df_temp = filter(df_slim, type!=trans2 & trans1=='Accommodate')
+df_c = filter(df_temp, time == 'Continuous')
+df_d = filter(df_temp, time == 'Discrete')
+df_h = filter(df_temp, time == 'Hybrid')
+
+# set up plot
+title = 'distribution_duration_nash_adv'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 700, height = 300)
+pic = ggplot() +
+  stat_ecdf(geom="step", data=df_c, aes(x=duration1, colour='blue')) +
+  stat_ecdf(geom="step", data=df_d, aes(x=duration1, colour='red')) +
+  stat_ecdf(geom="step", data=df_h, aes(x=duration1, colour='black')) +
+  scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
+  scale_y_continuous(name='density') +
+  theme_bw() + 
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+print(pic)
+dev.off()
+
+
+## duration at NE in direct-transfer dynamics
+df_temp = filter(df_slim, trans1=='Nash(A,a)' | trans1=='Nash(B,b)')
+df_c = filter(df_temp, time == 'Continuous')
+df_d = filter(df_temp, time == 'Discrete')
+df_h = filter(df_temp, time == 'Hybrid')
+
+# set up plot
+title = 'distribution_duration_nash_direct'
+file = paste("D:/Dropbox/Working Papers/Continuous Time BOS/writeup_ContinuousBOS/figs/", title, sep = "")
+file = paste(file, ".png", sep = "")
+png(file, width = 700, height = 300)
+pic = ggplot() +
+  stat_ecdf(geom="step", data=df_c, aes(x=duration1, colour='blue')) +
+  stat_ecdf(geom="step", data=df_d, aes(x=duration1, colour='red')) +
+  stat_ecdf(geom="step", data=df_h, aes(x=duration1, colour='black')) +
+  scale_x_continuous(name='duration(period)', waiver(), limits=c(0,10), breaks = c(0,2,4,6,8,10)) +
+  scale_y_continuous(name='density') +
+  theme_bw() + 
+  scale_colour_manual(values=c('black','blue','red'), labels=c('hybrid','continuous','discrete')) +
+  theme(plot.title = element_text(hjust = 0.5, size = 20), legend.text = element_text(size = 15),
+        axis.title.x = element_text(size = 15), axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15), axis.text.y = element_text(size = 15))
+print(pic)
+dev.off()
