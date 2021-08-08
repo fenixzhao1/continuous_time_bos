@@ -35,6 +35,7 @@ xtlogit coordinate continuous BoS1_4 BoS10 continuous_BoS1_4 continuous_BoS10 //
 outreg2 using D:\Dropbox\stata_table, tex nonote se replace nolabel bdec(3)
 
 
+
 ***** Pair-level Analysis *****
 ** coordinate rate summary
 use "D:\Dropbox\Working Papers\Continuous Time BOS\data\stata_bos_pair_full.dta", clear
@@ -152,6 +153,7 @@ logit one_ne continuous hybrid BoS1_4 BoS10 ///
 outreg2 using D:\Dropbox\stata_table, tex nonote se append nolabel bdec(3)
 
 
+
 ***** Pair-level Analysis with only time treatments *****
 ** coordinate rate summary
 use "D:\Dropbox\Working Papers\Continuous Time BOS\data\stata_bos_pair_full.dta", clear
@@ -215,6 +217,7 @@ logit alternating continuous hybrid sequence2 block2, cluster(session)
 outreg2 using D:\Dropbox\stata_table, tex nonote se append nolabel bdec(3)
 logit one_ne continuous hybrid sequence2 block2, cluster(session)
 outreg2 using D:\Dropbox\stata_table, tex nonote se append nolabel bdec(3)
+
 
 
 ***** Pair-level Analysis (continuous as baseline) *****
@@ -332,6 +335,7 @@ logit one_ne discrete hybrid BoS1_4 BoS10 ///
     discrete_BoS1_4 discrete_BoS10 hybrid_BoS1_4 hybrid_BoS10 ///
     sequence2 block2, cluster(session)
 outreg2 using D:\Dropbox\stata_table, tex nonote se append nolabel bdec(3)
+
 
 
 ***** Pair-level Analysis with only time treatments (continuous as baseline) *****
